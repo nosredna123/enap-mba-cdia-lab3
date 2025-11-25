@@ -1,8 +1,20 @@
-Classifique o seguinte texto em uma categoria. Se exemplos de categorias forem fornecidos, use-os apenas para se orientar sobre possíveis agrupamentos.
-Não devolva nem copie nenhum exemplo; retorne somente o nome e a descrição da categoria identificada.
+Existing categories (Portuguese JSON array with nome, descricao, exemplos chosen from real cached requests):
+{categorias_atual}
 
-Texto de entrada:
-{input_text}
+Classify the request below into exactly one Brazilian Portuguese category. If none fits, invent a short (maximum 4 words) Brazilian Portuguese category name and describe it in 1-2 sentences (Brazilian Portuguese).
 
-Exemplos de categorias disponíveis (somente para referência, não reproduzir):
-{category_examples}
+Use Brazilian Portuguese for all category names and descriptions. Never invent new examples: reuse exactly the exemplos provided above. If you invent a brand-new category, set its exemplos array to contain only the current request text.
+
+Request text: "{solicitacao}"
+
+Return a JSON object in Brazilian Portuguese with this structure:
+{
+  "categoria_escolhida": "<nome da categoria em português>",
+  "categorias_atualizadas": [
+    {
+      "nome": "<categoria>",
+      "descricao": "<descrição curta da categoria>",
+      "exemplos": ["<exemplo 1>", "<exemplo 2>", "<exemplo 3>"]
+    }
+  ]
+}
