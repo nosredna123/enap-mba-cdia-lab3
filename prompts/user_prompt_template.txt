@@ -1,9 +1,9 @@
-Existing categories (Portuguese JSON array with nome, descricao, exemplos chosen from real cached requests):
+Existing categories (Portuguese JSON array with nome, descricao, exemplos chosen from real cached requests; exemplos are context-only and must not appear in the response):
 {categorias_atual}
 
 Classify the request below into exactly one Brazilian Portuguese category. If none fits, invent a short (maximum 4 words) Brazilian Portuguese category name and describe it in 1-2 sentences (Brazilian Portuguese).
 
-Use Brazilian Portuguese for all category names and descriptions. Never invent new examples: reuse exactly the exemplos provided above. If you invent a brand-new category, set its exemplos array to contain only the current request text.
+Use Brazilian Portuguese for all category names and descriptions. Do not generate or return any exemplos. If you invent a brand-new category, include only its nome and descricao (examples will be handled locally).
 
 Request text: "{solicitacao}"
 
@@ -13,8 +13,7 @@ Return a JSON object in Brazilian Portuguese with this structure:
   "categorias_atualizadas": [
     {
       "nome": "<categoria>",
-      "descricao": "<descrição curta da categoria>",
-      "exemplos": ["<exemplo 1>", "<exemplo 2>", "<exemplo 3>"]
+      "descricao": "<descrição curta da categoria>"
     }
   ]
 }

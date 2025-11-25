@@ -2,8 +2,8 @@
 
 The script iterates over every workbook, validates that all sheets share the
 same structure (fail-fast on mismatches), calls the gpt-5-mini model to
-classify the "Solicitação" column, and emits a combined CSV with the new
-category column written in Brazilian Portuguese.
+classify the "Solicitação" column, and emits a combined Parquet file with the
+new category column written in Brazilian Portuguese.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ CategoryInfo = Dict[str, object]
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_INPUT_DIR = Path("relatorios")
-DEFAULT_OUTPUT_CSV = Path("output/classificacoes_relatorios.csv")
+DEFAULT_OUTPUT_PARQUET = Path("output/classificacoes_relatorios.parquet")
 DEFAULT_CACHE_PATH = Path("cache/classificacao_cache.json")
 DEFAULT_SYSTEM_PROMPT_PATH = Path("prompts/system_prompt.txt")
 DEFAULT_USER_PROMPT_TEMPLATE_PATH = Path("prompts/user_prompt_template.txt")
@@ -185,8 +185,10 @@ class LLMClassifier:
             raise ResponseParsingError("Categoria sem nome fornecido.")
         if not description:
             raise ResponseParsingError("Categoria sem descrição fornecida.")
+        if examples_raw is None:
+            examples_raw = []
         if not isinstance(examples_raw, list):
-            raise ResponseParsingError("Campo 'exemplos' deve ser uma lista.")
+            raise ResponseParsingError("Campo 'exemplos' deve ser uma lista quando fornecido.")
         examples = [str(example).strip() for example in examples_raw if str(example).strip()]
         return {"nome": name, "descricao": description, "exemplos": examples}
 
@@ -284,7 +286,7 @@ def _normalize_solicitacao(value: object) -> str:
 
 def process_workbooks(
     input_dir: Path,
-    output_csv: Path,
+    output_parquet: Path,
     cache_path: Path,
     system_prompt: str,
     user_prompt_template: str,
@@ -331,10 +333,10 @@ def process_workbooks(
         raise ValueError("Nenhum arquivo .xls encontrado para processamento.")
 
     combined = pd.concat(processed_frames, ignore_index=True)
-    output_csv.parent.mkdir(parents=True, exist_ok=True)
-    combined.to_csv(output_csv, index=False)
+    output_parquet.parent.mkdir(parents=True, exist_ok=True)
+    combined.to_parquet(output_parquet, index=False)
     classifier.cache.save()
-    LOGGER.info("Processamento concluído. Saída: %s", output_csv)
+    LOGGER.info("Processamento concluído. Saída: %s", output_parquet)
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -346,10 +348,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Diretório contendo os arquivos .xls (padrão: relatorios)",
     )
     parser.add_argument(
-        "--output-csv",
+        "--output-parquet",
         type=Path,
-        default=DEFAULT_OUTPUT_CSV,
-        help="Caminho do CSV combinado a ser gerado",
+        default=DEFAULT_OUTPUT_PARQUET,
+        help="Caminho do arquivo Parquet combinado a ser gerado",
     )
     parser.add_argument(
         "--cache",
@@ -401,7 +403,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     process_workbooks(
         input_dir=args.input_dir,
-        output_csv=args.output_csv,
+        output_parquet=args.output_parquet,
         cache_path=args.cache,
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
