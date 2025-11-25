@@ -12,15 +12,26 @@ Este projeto processa todos os arquivos `.xls` em `relatorios/`, valida que as p
 7. Junta todas as planilhas processadas em `output/classificacoes_relatorios.parquet` (por padrão) e salva o cache em `cache/classificacao_cache.json`.
 
 ## Preparação do ambiente
+Opção rápida (recomendada):
+```bash
+source scripts/setup_env.sh
+```
+Isso cria `.venv`, ativa e instala `requirements.txt`. Para reativar depois:
+```bash
+source .venv/bin/activate
+```
+
+Opção manual:
 1. Crie e ative um ambiente virtual Python 3.10+.
-2. Instale dependências:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Crie um arquivo `.env` a partir de `.env.example` e preencha `ENAP_LAB3_OPENAI_API_TOKEN` com seu token da API OpenAI.
+2. Instale dependências com `pip install -r requirements.txt`.
+
+Em ambos os casos, crie `.env` a partir de `.env.example` e preencha `ENAP_LAB3_OPENAI_API_TOKEN` com seu token da API OpenAI.
 
 ## Execução
-Use o script principal para processar os relatórios:
+Fluxo objetivo para rodar o processamento:
+1) Ative o ambiente virtual (`source .venv/bin/activate` ou `source scripts/setup_env.sh`).
+2) Garanta que `relatorios/` contém os `.xls` e que `.env` tem `ENAP_LAB3_OPENAI_API_TOKEN`.
+3) Rode o comando abaixo:
 ```bash
 python process_relatorios.py \
   --input-dir relatorios \
