@@ -1,0 +1,8 @@
+Classifique o seguinte texto em uma categoria. Se exemplos de categorias forem fornecidos, use-os apenas para se orientar sobre possíveis agrupamentos.
+Não devolva nem copie nenhum exemplo; retorne somente o nome e a descrição da categoria identificada.
+
+Texto de entrada:
+{input_text}
+
+Exemplos de categorias disponíveis (somente para referência, não reproduzir):
+{category_examples}
