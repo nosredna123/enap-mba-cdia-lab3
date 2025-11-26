@@ -24,7 +24,8 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_INPUT_DIR = Path("relatorios")
 DEFAULT_OUTPUT_PARQUET = Path("output/classificacoes_relatorios.parquet")
-DEFAULT_CACHE_PATH = Path("cache/classificacao_cache.json")
+DEFAULT_CLASSIFICATION_CACHE_PATH = Path("cache/classificacao_cache.json")
+DEFAULT_CATEGORIES_PATH = Path("cache/categorias.json")
 DEFAULT_SYSTEM_PROMPT_PATH = Path("prompts/system_prompt.txt")
 DEFAULT_USER_PROMPT_TEMPLATE_PATH = Path("prompts/user_prompt_template.txt")
 CATEGORY_COLUMN_NAME = "Categoria da Solicitação"
@@ -69,11 +70,11 @@ def _load_prompt(path: Path) -> str:
 
 
 class ClassificationCache:
-    """Simple JSON-backed cache keyed by the solicitation text."""
+    """Lightweight cache that maps solicitation text to category names."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        self.data: Dict[str, Dict[str, object]] = {}
+        self.data: Dict[str, str] = {}
         self._load()
 
     def _load(self) -> None:
@@ -81,6 +82,9 @@ class ClassificationCache:
             return
         try:
             self.data = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(self.data, dict):
+                LOGGER.warning("Cache file %s has invalid format; starting fresh", self.path)
+                self.data = {}
         except json.JSONDecodeError:
             LOGGER.warning(
                 "Cache file %s is not valid JSON; starting fresh",
@@ -93,21 +97,22 @@ class ClassificationCache:
         cache_body = json.dumps(self.data, ensure_ascii=False, indent=2)
         self.path.write_text(cache_body, encoding="utf-8")
 
-    def get(self, key: str) -> Optional[Dict[str, object]]:
+    def get(self, key: str) -> Optional[str]:
+        """Get the category name for a solicitation text."""
         return self.data.get(key)
 
-    def set(self, key: str, value: Dict[str, object], *, save_immediately: bool = False) -> None:
-        """Set a cache entry and optionally persist to disk immediately.
+    def set(self, key: str, category: str, *, save_immediately: bool = False) -> None:
+        """Set a classification result and optionally persist to disk immediately.
         
         Args:
             key: The cache key (normalized solicitation text)
-            value: The cache payload with classification result
+            category: The category name assigned to this solicitation
             save_immediately: If True, persist cache to disk after setting
         
         Raises:
             IOError: If save_immediately=True and disk write fails
         """
-        self.data[key] = value
+        self.data[key] = category
         if save_immediately:
             try:
                 self.save()
@@ -116,39 +121,121 @@ class ClassificationCache:
                 raise
 
 
+class CategoryRegistry:
+    """Registry that maintains category definitions with descriptions and examples."""
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.categories: Dict[str, CategoryInfo] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            return
+        try:
+            loaded = json.loads(self.path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                self.categories = loaded
+            else:
+                LOGGER.warning("Categories file %s has invalid format; starting fresh", self.path)
+                self.categories = {}
+        except json.JSONDecodeError:
+            LOGGER.warning(
+                "Categories file %s is not valid JSON; starting fresh",
+                self.path,
+            )
+            self.categories = {}
+
+    def save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        categories_body = json.dumps(self.categories, ensure_ascii=False, indent=2)
+        self.path.write_text(categories_body, encoding="utf-8")
+
+    def get_all(self) -> Dict[str, CategoryInfo]:
+        """Return all categories."""
+        return self.categories
+
+    def update_categories(self, new_categories: Sequence[object]) -> None:
+        """Merge new category definitions into the registry."""
+        for raw in new_categories:
+            if not isinstance(raw, dict):
+                raise ResponseParsingError("Elemento de categoria inválido; esperado objeto JSON.")
+            name = str(raw.get("nome", "")).strip()
+            description = str(raw.get("descricao", "")).strip()
+            examples_raw = raw.get("exemplos", [])
+            
+            if not name:
+                raise ResponseParsingError("Categoria sem nome fornecido.")
+            if not description:
+                raise ResponseParsingError("Categoria sem descrição fornecida.")
+            if examples_raw is None:
+                examples_raw = []
+            if not isinstance(examples_raw, list):
+                raise ResponseParsingError("Campo 'exemplos' deve ser uma lista quando fornecido.")
+            
+            new_examples = [str(ex).strip() for ex in examples_raw if str(ex).strip()]
+            
+            existing = self.categories.get(name, {"nome": name, "descricao": "", "exemplos": []})
+            updated_description = description or existing.get("descricao", "")
+            existing_examples = existing.get("exemplos", []) if isinstance(existing.get("exemplos"), list) else []
+            
+            # Merge examples without duplicates
+            merged_examples: List[str] = []
+            for source in (existing_examples, new_examples):
+                for item in source:
+                    text = str(item).strip()
+                    if text and text not in merged_examples:
+                        merged_examples.append(text)
+            
+            self.categories[name] = {
+                "nome": name,
+                "descricao": updated_description,
+                "exemplos": merged_examples,
+            }
+
+    def add_example_to_category(self, category_name: str, example: str) -> None:
+        """Add an example to a category, placing it first in the list."""
+        current = self.categories.get(category_name, {"nome": category_name, "descricao": "", "exemplos": []})
+        examples = current.get("exemplos", []) if isinstance(current.get("exemplos"), list) else []
+        updated_examples = [example] + [ex for ex in examples if ex != example]
+        self.categories[category_name] = {
+            "nome": category_name,
+            "descricao": current.get("descricao", ""),
+            "exemplos": updated_examples,
+        }
+
+
 class LLMClassifier:
     """Wraps prompting, parsing, caching, and category tracking."""
 
     def __init__(
         self,
         cache: ClassificationCache,
+        category_registry: CategoryRegistry,
         system_prompt: str,
         user_prompt_template: str,
         max_retries: int = 3,
         backoff_seconds: float = 2.0,
     ) -> None:
         self.cache = cache
+        self.category_registry = category_registry
         self.system_prompt = system_prompt
         self.user_prompt_template = user_prompt_template
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
-        self.categories: Dict[str, CategoryInfo] = {}
         self.cache_hits = 0
         self.cache_misses = 0
 
     def classify(self, solicitacao: str) -> str:
         text_key = solicitacao.strip() if solicitacao is not None else ""
-        cached = self.cache.get(text_key)
-        if cached:
-            cached_category = cached.get("categoria_escolhida")
-            cached_categories = cached.get("categorias_atualizadas")
-            if isinstance(cached_category, str) and isinstance(cached_categories, list):
-                self._merge_categories(cached_categories)
-                if text_key:
-                    self._add_example_to_category(cached_category, text_key)
-                self.cache_hits += 1
-                LOGGER.debug("Cache hit para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
-                return cached_category
+        cached_category = self.cache.get(text_key)
+        if cached_category:
+            if text_key:
+                self.category_registry.add_example_to_category(cached_category, text_key)
+            self.cache_hits += 1
+            LOGGER.debug("Cache hit para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
+            return cached_category
+        
         self.cache_misses += 1
         LOGGER.debug("Cache miss para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
 
@@ -168,19 +255,16 @@ class LLMClassifier:
         LOGGER.debug("Raw model response (first 1000 chars): %s", model_response[:1000])
         LOGGER.debug("Model response type: %s", type(model_response))
         parsed = self._parse_response(model_response)
-        self._merge_categories(parsed.get("categorias_atualizadas", []))
+        self.category_registry.update_categories(parsed.get("categorias_atualizadas", []))
         categoria = parsed["categoria_escolhida"]
         if text_key:
-            self._add_example_to_category(categoria, text_key)
-        cache_payload: Dict[str, object] = {
-            "categoria_escolhida": categoria,
-            "categorias_atualizadas": self._categories_as_list(
-                required_examples={categoria: text_key if text_key else None}
-            ),
-        }
+            self.category_registry.add_example_to_category(categoria, text_key)
+        
         LOGGER.debug("Persistindo nova classificação no cache: categoria='%s'", categoria)
-        self.cache.set(text_key, cache_payload, save_immediately=True)
-        LOGGER.debug("Cache atualizado com sucesso. Total de entradas: %d", len(self.cache.data))
+        self.cache.set(text_key, categoria, save_immediately=True)
+        self.category_registry.save()
+        LOGGER.debug("Cache e categorias atualizados. Total classificações: %d | Total categorias: %d", 
+                     len(self.cache.data), len(self.category_registry.categories))
         return categoria
 
     def _categories_as_json(self) -> str:
@@ -197,8 +281,9 @@ class LLMClassifier:
     ) -> List[CategoryInfo]:
         snapshot: List[CategoryInfo] = []
         required_examples = required_examples or {}
-        for name in sorted(self.categories):
-            category = self.categories[name]
+        categories = self.category_registry.get_all()
+        for name in sorted(categories):
+            category = categories[name]
             examples = category.get("exemplos", []) if isinstance(category.get("exemplos"), list) else []
             required = required_examples.get(name)
             sampled = self._sample_examples(examples, required_example=required, limit=sample_limit)
@@ -210,59 +295,6 @@ class LLMClassifier:
                 }
             )
         return snapshot
-
-    def _merge_categories(self, new_categories: Sequence[object]) -> None:
-        for raw in new_categories:
-            if not isinstance(raw, dict):
-                raise ResponseParsingError("Elemento de categoria inválido; esperado objeto JSON.")
-            normalized = self._normalize_category_info(raw)
-            name = normalized["nome"]
-            existing = self.categories.get(name, {"nome": name, "descricao": "", "exemplos": []})
-            updated_description = normalized["descricao"] or existing.get("descricao", "")
-            merged_examples = self._merge_examples(
-                existing.get("exemplos", []),
-                normalized.get("exemplos", []),
-            )
-            self.categories[name] = {
-                "nome": name,
-                "descricao": updated_description,
-                "exemplos": merged_examples,
-            }
-
-    def _normalize_category_info(self, raw: Dict[str, object]) -> Dict[str, object]:
-        name = str(raw.get("nome", "")).strip()
-        description = str(raw.get("descricao", "")).strip()
-        examples_raw = raw.get("exemplos", [])
-        if not name:
-            raise ResponseParsingError("Categoria sem nome fornecido.")
-        if not description:
-            raise ResponseParsingError("Categoria sem descrição fornecida.")
-        if examples_raw is None:
-            examples_raw = []
-        if not isinstance(examples_raw, list):
-            raise ResponseParsingError("Campo 'exemplos' deve ser uma lista quando fornecido.")
-        examples = [str(example).strip() for example in examples_raw if str(example).strip()]
-        return {"nome": name, "descricao": description, "exemplos": examples}
-
-    def _merge_examples(self, existing: object, new: object) -> List[str]:
-        merged: List[str] = []
-        for source in (existing, new):
-            if isinstance(source, list):
-                for item in source:
-                    text = str(item).strip()
-                    if text and text not in merged:
-                        merged.append(text)
-        return merged
-
-    def _add_example_to_category(self, category_name: str, example: str) -> None:
-        current = self.categories.get(category_name, {"nome": category_name, "descricao": "", "exemplos": []})
-        examples = current.get("exemplos", []) if isinstance(current.get("exemplos"), list) else []
-        updated_examples = [example] + [ex for ex in examples if ex != example]
-        self.categories[category_name] = {
-            "nome": category_name,
-            "descricao": current.get("descricao", ""),
-            "exemplos": updated_examples,
-        }
 
     def _sample_examples(self, examples: List[str], *, required_example: Optional[str], limit: int) -> List[str]:
         unique_examples = [ex for ex in examples if ex]
@@ -297,9 +329,6 @@ class LLMClassifier:
             raise ResponseParsingError("Campo 'categorias_atualizadas' deve ser uma lista.")
 
         parsed["categoria_escolhida"] = categoria.strip()
-        parsed["categorias_atualizadas"] = [
-            self._normalize_category_info(item) for item in categorias_atualizadas
-        ]
         return parsed
 
 
@@ -342,7 +371,8 @@ def _normalize_solicitacao(value: object) -> str:
 def process_workbooks(
     input_dir: Path,
     output_parquet: Path,
-    cache_path: Path,
+    classification_cache_path: Path,
+    categories_path: Path,
     system_prompt: str,
     user_prompt_template: str,
     max_retries: int = 3,
@@ -352,7 +382,8 @@ def process_workbooks(
         raise FileNotFoundError(f"Diretório de entrada não encontrado: {input_dir}")
 
     classifier = LLMClassifier(
-        ClassificationCache(cache_path),
+        ClassificationCache(classification_cache_path),
+        CategoryRegistry(categories_path),
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
         max_retries=max_retries,
@@ -424,10 +455,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Caminho do arquivo Parquet combinado a ser gerado",
     )
     parser.add_argument(
-        "--cache",
+        "--classification-cache",
         type=Path,
-        default=DEFAULT_CACHE_PATH,
-        help="Arquivo de cache JSON para reutilizar classificações",
+        default=DEFAULT_CLASSIFICATION_CACHE_PATH,
+        help="Arquivo de cache JSON para classificações (mapeamento texto->categoria)",
+    )
+    parser.add_argument(
+        "--categories",
+        type=Path,
+        default=DEFAULT_CATEGORIES_PATH,
+        help="Arquivo JSON para registro de categorias (definições e exemplos)",
     )
     parser.add_argument(
         "--system-prompt",
@@ -474,7 +511,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     process_workbooks(
         input_dir=args.input_dir,
         output_parquet=args.output_parquet,
-        cache_path=args.cache,
+        classification_cache_path=args.classification_cache,
+        categories_path=args.categories,
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
         max_retries=args.max_retries,

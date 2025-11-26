@@ -7,9 +7,11 @@ Este projeto processa todos os arquivos `.xls` em `relatorios/`, valida que as p
 2. Percorre cada arquivo `.xls` na pasta de entrada (padrão: `relatorios/`), lendo todas as planilhas via `pandas`/`xlrd`.
 3. Valida de forma fail-fast que todas as planilhas têm os mesmos cabeçalhos e que **"Solicitação"** é a última coluna (sem duplicatas).
 4. Normaliza o texto da solicitação; se estiver vazio, a classificação é pulada e a célula de categoria permanece vazia.
-5. Constrói o contexto de categorias em português (nome, descrição e até três exemplos reais armazenados em cache) e chama o LLM com retentativas e backoff exponencial.
-6. Mescla categorias retornadas pelo modelo, atualiza exemplos com o texto atual e grava as classificações no cache JSON.
-7. Junta todas as planilhas processadas em `output/classificacoes_relatorios.parquet` (por padrão) e salva o cache em `cache/classificacao_cache.json`.
+5. Constrói o contexto de categorias em português (nome, descrição e até três exemplos reais armazenados no registro de categorias) e chama o LLM com retentativas e backoff exponencial.
+6. Após cada nova classificação, persiste imediatamente:
+   - O mapeamento texto→categoria em `cache/classificacao_cache.json`
+   - As definições de categorias atualizadas em `cache/categorias.json`
+7. Junta todas as planilhas processadas em `output/classificacoes_relatorios.parquet` (por padrão).
 
 ## Preparação do ambiente
 Opção rápida (recomendada):
@@ -36,7 +38,8 @@ Fluxo objetivo para rodar o processamento:
 python process_relatorios.py \
   --input-dir relatorios \
   --output-parquet output/classificacoes_relatorios.parquet \
-  --cache cache/classificacao_cache.json \
+  --classification-cache cache/classificacao_cache.json \
+  --categories cache/categorias.json \
   --system-prompt prompts/system_prompt.txt \
   --user-prompt-template prompts/user_prompt_template.txt \
   --max-retries 3 \
@@ -47,7 +50,8 @@ python process_relatorios.py \
 ### Opções importantes
 - `--input-dir`: diretório com os `.xls` a processar.
 - `--output-parquet`: caminho do arquivo Parquet combinado de saída (será criado com diretórios pai).
-- `--cache`: arquivo JSON usado para reutilizar classificações e exemplos reais.
+- `--classification-cache`: arquivo JSON que armazena mapeamentos texto→categoria (leve e rápido).
+- `--categories`: arquivo JSON que mantém as definições de categorias com descrições e exemplos.
 - `--max-retries` e `--backoff-seconds`: controlam política genérica de retentativa com exponencial backoff para chamadas ao LLM.
 - `--log-level`: ajusta verbosidade (DEBUG para depuração detalhada).
 
@@ -55,16 +59,24 @@ python process_relatorios.py \
 - Falhas de esquema ou ausência/duplicação da coluna **"Solicitação"** interrompem a execução imediatamente.
 - Textos vazios na coluna-alvo são ignorados sem chamar o modelo.
 - A resposta do modelo deve conter `categoria_escolhida` e `categorias_atualizadas` apenas com nome e descrição (sem retorno de exemplos); sempre em português do Brasil.
-- As classificações e categorias retornadas são armazenadas no cache; exemplos são deduplicados e mantêm no máximo três amostras por categoria para próximos prompts quando enviados ao modelo.
-- Caso o modelo proponha nova categoria, o exemplo inicial é o próprio texto classificado antes de ser salvo em cache.
+- **Sistema de cache otimizado em dois arquivos**:
+  - `classificacao_cache.json`: armazena apenas o mapeamento texto→categoria (leve, escrita rápida)
+  - `categorias.json`: mantém as definições completas de categorias com descrições e exemplos
+- Após cada nova classificação, ambos os arquivos são persistidos imediatamente (fail-fast), prevenindo perda de dados e permitindo interrupção/retomada do processamento.
+- Exemplos são deduplicados e mantêm no máximo três amostras por categoria para próximos prompts ao modelo.
+- Caso o modelo proponha nova categoria, o exemplo inicial é o próprio texto classificado.
 
 ## Estrutura de arquivos
 - `process_relatorios.py`: CLI principal que lê os `.xls`, valida colunas, chama o LLM com cache e monta o Parquet final.
 - `llm_client.py`: wrapper da API OpenAI com carregamento opcional de `.env`, estimativa de tokens, extração de texto da resposta e decorador genérico de retentativa com backoff.
 - `prompts/`: contém o prompt de sistema e o template de prompt do usuário (ambos em inglês, mas exigindo saídas em português do Brasil).
 - `relatorios/`: pasta esperada com os arquivos `.xls` de entrada.
-- `output/` e `cache/`: criados automaticamente para o arquivo Parquet combinado e o cache JSON, respectivamente.
+- `cache/`: criado automaticamente para armazenar dois arquivos JSON:
+  - `classificacao_cache.json`: mapeamentos leves texto→categoria
+  - `categorias.json`: registro completo de categorias com descrições e exemplos
+- `output/`: criado automaticamente para o arquivo Parquet combinado.
 
 ## Observações
 - O pipeline segue princípios PEP8, DRY e fail-fast para facilitar manutenção e diagnóstico rápido.
-- O cache persiste as categorias entre execuções, permitindo que exemplos reais auxiliem novas classificações enquanto minimizam chamadas à API.
+- O sistema de cache otimizado elimina redundância, reduzindo drasticamente o tamanho dos arquivos e o tempo de I/O.
+- Cache é persistido após cada classificação, prevenindo perda de progresso em caso de interrupção.
