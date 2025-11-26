@@ -546,7 +546,8 @@ def process_workbooks(
                     categorias.append("")
                     skipped_empty += 1
                     global_row_counter += 1
-                    LOGGER.debug("  Linha %d/%d: solicitação vazia ignorada", idx, total_lines)
+                    global_percentage = (global_row_counter / total_rows_all_files) * 100
+                    LOGGER.info("  [%d/%d | %.1f%%] %s (vazia - ignorada)", global_row_counter, total_rows_all_files, global_percentage, year_info)
                     continue
 
                 total_requests += 1
