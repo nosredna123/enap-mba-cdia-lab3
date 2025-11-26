@@ -175,7 +175,7 @@ class CategoryRegistry:
             
             new_examples = [str(ex).strip() for ex in examples_raw if str(ex).strip()]
             
-            existing = self.categories.get(name, {"nome": name, "descricao": "", "exemplos": []})
+            existing = self.categories.get(name, {"descricao": "", "exemplos": []})
             updated_description = description or existing.get("descricao", "")
             existing_examples = existing.get("exemplos", []) if isinstance(existing.get("exemplos"), list) else []
             
@@ -188,18 +188,16 @@ class CategoryRegistry:
                         merged_examples.append(text)
             
             self.categories[name] = {
-                "nome": name,
                 "descricao": updated_description,
                 "exemplos": merged_examples,
             }
 
     def add_example_to_category(self, category_name: str, example: str) -> None:
         """Add an example to a category, placing it first in the list."""
-        current = self.categories.get(category_name, {"nome": category_name, "descricao": "", "exemplos": []})
+        current = self.categories.get(category_name, {"descricao": "", "exemplos": []})
         examples = current.get("exemplos", []) if isinstance(current.get("exemplos"), list) else []
         updated_examples = [example] + [ex for ex in examples if ex != example]
         self.categories[category_name] = {
-            "nome": category_name,
             "descricao": current.get("descricao", ""),
             "exemplos": updated_examples,
         }
@@ -279,6 +277,7 @@ class LLMClassifier:
         sample_limit: int = 3,
         required_examples: Optional[Dict[str, str]] = None,
     ) -> List[CategoryInfo]:
+        """Build category list for LLM prompt, reconstructing 'nome' from keys."""
         snapshot: List[CategoryInfo] = []
         required_examples = required_examples or {}
         categories = self.category_registry.get_all()
@@ -287,6 +286,7 @@ class LLMClassifier:
             examples = category.get("exemplos", []) if isinstance(category.get("exemplos"), list) else []
             required = required_examples.get(name)
             sampled = self._sample_examples(examples, required_example=required, limit=sample_limit)
+            # Reconstruct 'nome' from key for LLM prompt
             snapshot.append(
                 {
                     "nome": name,
