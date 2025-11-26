@@ -8,9 +8,11 @@ new category column written in Brazilian Portuguese.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import random
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -58,6 +60,31 @@ TEXT_FORMAT_SCHEMA: Dict[str, object] = {
 }
 
 
+def _normalize_text(text: str) -> str:
+    """Normalize text for cache key generation.
+    
+    - Lowercase
+    - Strip leading/trailing whitespace
+    - Collapse multiple spaces/newlines to single space
+    - Keep punctuation (semantically important)
+    """
+    if not text:
+        return ""
+    # Lowercase
+    normalized = text.lower()
+    # Strip leading/trailing whitespace
+    normalized = normalized.strip()
+    # Collapse multiple whitespace characters (spaces, tabs, newlines) to single space
+    normalized = re.sub(r'\s+', ' ', normalized)
+    return normalized
+
+
+def _generate_cache_key(text: str) -> str:
+    """Generate SHA256 hash of normalized text for cache key."""
+    normalized = _normalize_text(text)
+    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+
+
 def _load_prompt(path: Path) -> str:
     """Read and validate a prompt file (fail-fast on missing/empty)."""
 
@@ -71,21 +98,40 @@ def _load_prompt(path: Path) -> str:
 
 
 class ClassificationCache:
-    """Lightweight cache that maps solicitation text to category names."""
+    """Hash-based cache that maps normalized solicitation text to category names.
+    
+    Cache structure: {hash: {"category": str, "original": str}}
+    """
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        self.data: Dict[str, str] = {}
+        self.data: Dict[str, Dict[str, str]] = {}
         self._load()
 
     def _load(self) -> None:
         if not self.path.exists():
             return
         try:
-            self.data = json.loads(self.path.read_text(encoding="utf-8"))
-            if not isinstance(self.data, dict):
+            loaded = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(loaded, dict):
                 LOGGER.warning("Cache file %s has invalid format; starting fresh", self.path)
                 self.data = {}
+                return
+            
+            # Migrate old format (text: category) to new format (hash: {category, original})
+            self.data = {}
+            for key, value in loaded.items():
+                if isinstance(value, dict) and "category" in value:
+                    # New format - use as-is
+                    self.data[key] = value
+                elif isinstance(value, str):
+                    # Old format - migrate by generating hash from key
+                    cache_key = _generate_cache_key(key)
+                    self.data[cache_key] = {
+                        "category": value,
+                        "original": key
+                    }
+                    LOGGER.debug("Migrated old cache entry to hash-based format")
         except json.JSONDecodeError:
             LOGGER.warning(
                 "Cache file %s is not valid JSON; starting fresh",
@@ -98,22 +144,43 @@ class ClassificationCache:
         cache_body = json.dumps(self.data, ensure_ascii=False, indent=2)
         self.path.write_text(cache_body, encoding="utf-8")
 
-    def get(self, key: str) -> Optional[str]:
-        """Get the category name for a solicitation text."""
-        return self.data.get(key)
+    def get(self, text: str) -> Optional[str]:
+        """Get the category name for a solicitation text.
+        
+        Args:
+            text: The original solicitation text
+            
+        Returns:
+            The category name if found in cache, None otherwise
+        """
+        cache_key = _generate_cache_key(text)
+        entry = self.data.get(cache_key)
+        if entry:
+            return entry["category"]
+        return None
 
-    def set(self, key: str, category: str, *, save_immediately: bool = False) -> None:
+    def set(self, text: str, category: str, *, save_immediately: bool = False) -> None:
         """Set a classification result and optionally persist to disk immediately.
         
         Args:
-            key: The cache key (normalized solicitation text)
+            text: The original solicitation text
             category: The category name assigned to this solicitation
             save_immediately: If True, persist cache to disk after setting
         
         Raises:
             IOError: If save_immediately=True and disk write fails
         """
-        self.data[key] = category
+        cache_key = _generate_cache_key(text)
+        # Store both category and original text (for first occurrence)
+        if cache_key not in self.data:
+            self.data[cache_key] = {
+                "category": category,
+                "original": text[:200]  # Store first 200 chars as reference
+            }
+        else:
+            # Update category if it changed
+            self.data[cache_key]["category"] = category
+        
         if save_immediately:
             try:
                 self.save()
@@ -238,14 +305,15 @@ class LLMClassifier:
         self.llm_times: List[float] = []  # Track LLM call durations
 
     def classify(self, solicitacao: str) -> Tuple[str, bool, Optional[float]]:
-        """Classify a solicitation and return (category, was_cached)."""
+        """Classify a solicitation and return (category, was_cached, llm_time)."""
         text_key = solicitacao.strip() if solicitacao is not None else ""
         cached_category = self.cache.get(text_key)
         if cached_category:
             if text_key:
                 self.category_registry.add_example_to_category(cached_category, text_key)
             self.cache_hits += 1
-            LOGGER.debug("Cache hit para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
+            normalized = _normalize_text(text_key)
+            LOGGER.debug("Cache hit (normalized: '%s...') -> '%s'", normalized[:50], cached_category)
             return cached_category, True, None
         
         self.cache_misses += 1
