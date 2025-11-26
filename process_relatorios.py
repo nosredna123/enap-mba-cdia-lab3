@@ -187,16 +187,27 @@ class CategoryRegistry:
                     if text and text not in merged_examples:
                         merged_examples.append(text)
             
+            # Limit to 3 examples maximum, randomly selecting if needed
+            if len(merged_examples) > 3:
+                merged_examples = random.sample(merged_examples, 3)
+            
             self.categories[name] = {
                 "descricao": updated_description,
                 "exemplos": merged_examples,
             }
 
     def add_example_to_category(self, category_name: str, example: str) -> None:
-        """Add an example to a category, placing it first in the list."""
+        """Add an example to a category, placing it first and limiting to 3 total examples."""
         current = self.categories.get(category_name, {"descricao": "", "exemplos": []})
         examples = current.get("exemplos", []) if isinstance(current.get("exemplos"), list) else []
+        # Remove if already exists to avoid duplicates
         updated_examples = [example] + [ex for ex in examples if ex != example]
+        # Limit to 3 examples maximum
+        if len(updated_examples) > 3:
+            # Keep the new example and randomly select 2 from the rest
+            remaining = updated_examples[1:]
+            sampled = random.sample(remaining, min(2, len(remaining)))
+            updated_examples = [example] + sampled
         self.categories[category_name] = {
             "descricao": current.get("descricao", ""),
             "exemplos": updated_examples,
