@@ -3,6 +3,7 @@
 This module wraps the `call_openai_api` helper supplied in the project
 requirements so the rest of the codebase can depend on a single import.
 """
+
 from __future__ import annotations
 
 import os
@@ -179,6 +180,10 @@ def call_openai_api(
         "input": input_messages,
         "max_output_tokens": effective_max_output_tokens,
         "tool_choice": "none",
+        "reasoning": {
+            "effort": "medium",
+            "summary": "auto",
+        },
     }
     if context is not None:
         payload["instructions"] = context
@@ -261,8 +266,9 @@ def extract_text_from_response(response: Union[Dict[str, Any], Any]) -> str:
     """
     import json
     import logging
+
     logger = logging.getLogger(__name__)
-    
+
     logger.debug("Full response: %s", json.dumps(response, indent=2)[:2000])
 
     if not isinstance(response, dict):
@@ -271,12 +277,17 @@ def extract_text_from_response(response: Union[Dict[str, Any], Any]) -> str:
     # Check if response is incomplete
     if response.get("status") == "incomplete":
         reason = response.get("incomplete_details", {}).get("reason", "unknown")
-        raise ResponseParsingError(f"Response incomplete: {reason}. Try increasing max_output_tokens or simplifying the prompt.")
+        raise ResponseParsingError(
+            f"Response incomplete: {reason}. Try increasing max_output_tokens or simplifying the prompt."
+        )
 
     # Check for json_schema output with summary
     if "output" in response and isinstance(response["output"], list):
         for output_item in response["output"]:
-            if isinstance(output_item, dict) and output_item.get("type") == "json_schema":
+            if (
+                isinstance(output_item, dict)
+                and output_item.get("type") == "json_schema"
+            ):
                 if "summary" in output_item:
                     summary = output_item["summary"]
                     if isinstance(summary, dict):
@@ -293,7 +304,10 @@ def extract_text_from_response(response: Union[Dict[str, Any], Any]) -> str:
                     for content_item in content:
                         if isinstance(content_item, dict):
                             # Check for output_text type
-                            if content_item.get("type") == "output_text" and "text" in content_item:
+                            if (
+                                content_item.get("type") == "output_text"
+                                and "text" in content_item
+                            ):
                                 text_val = content_item["text"]
                                 if isinstance(text_val, str):
                                     return text_val.strip()
@@ -315,7 +329,11 @@ def extract_text_from_response(response: Union[Dict[str, Any], Any]) -> str:
         return response["output_text"].strip()
 
     # Check for choices format (Chat Completions API)
-    if "choices" in response and isinstance(response["choices"], list) and response["choices"]:
+    if (
+        "choices" in response
+        and isinstance(response["choices"], list)
+        and response["choices"]
+    ):
         choice0 = response["choices"][0]
         if isinstance(choice0, dict) and "message" in choice0:
             message = choice0["message"]
@@ -327,6 +345,64 @@ def extract_text_from_response(response: Union[Dict[str, Any], Any]) -> str:
     raise ResponseParsingError("Could not extract text from LLM response")
 
 
+def extract_reasoning_from_response(
+    response: Union[Dict[str, Any], Any],
+) -> Optional[str]:
+    """Extract reasoning summary from a Responses API output if available.
+    
+    For gpt-5-mini and other reasoning models, the reasoning summary is found in:
+    - output[i] where type == "reasoning"
+    - summary[j].text for each summary item
+    
+    Returns None if no reasoning summary is found in the response.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not isinstance(response, dict):
+        return None
+
+    # Check for reasoning in output items
+    if "output" in response and isinstance(response["output"], list):
+        for output_item in response["output"]:
+            if isinstance(output_item, dict) and output_item.get("type") == "reasoning":
+                # Check for summary array
+                summary = output_item.get("summary")
+                if summary and isinstance(summary, list):
+                    # Extract text from summary items
+                    texts = []
+                    for item in summary:
+                        if isinstance(item, dict):
+                            # Look for text field or type="reasoning_summary"
+                            if "text" in item:
+                                texts.append(str(item["text"]).strip())
+                            elif item.get("type") == "reasoning_summary" and "text" in item:
+                                texts.append(str(item["text"]).strip())
+                        elif isinstance(item, str):
+                            texts.append(item.strip())
+                    
+                    if texts:
+                        return " ".join(texts)
+                
+                # Summary exists but is empty - check if reasoning tokens were used
+                usage = response.get("usage", {})
+                output_details = usage.get("output_tokens_details", {})
+                reasoning_tokens = output_details.get("reasoning_tokens", 0)
+                
+                if reasoning_tokens > 0:
+                    logger.debug(
+                        "Reasoning tokens generated (%d) but summary is empty. "
+                        "This may occur with structured output (json_schema).",
+                        reasoning_tokens
+                    )
+                    # Get the reasoning config info
+                    reasoning_config = response.get("reasoning", {})
+                    effort = reasoning_config.get("effort", "unknown")
+                    return f"[Reasoning used: {reasoning_tokens} tokens, effort={effort}, summary not available with json_schema]"
+
+    return None
+
+
 def retry_call_openai(
     user_msg: str,
     context: Optional[str] = None,
@@ -334,21 +410,38 @@ def retry_call_openai(
     attempts: int = 3,
     backoff_seconds: float = 2.0,
     text_format: Optional[Dict[str, Any]] = None,
-) -> str:
-    """Call the API with retry/backoff using the generic decorator."""
+    return_full_response: bool = False,
+) -> Union[str, Tuple[str, Dict[str, Any]]]:
+    """Call the API with retry/backoff using the generic decorator.
+
+    Args:
+        user_msg: The user prompt
+        context: Optional system context
+        model: Model name
+        attempts: Number of retry attempts
+        backoff_seconds: Backoff duration
+        text_format: Optional text format specification
+        return_full_response: If True, return (text, full_response) tuple
+
+    Returns:
+        Either the extracted text string, or a tuple of (text, full_response)
+    """
 
     @retry_with_backoff(
         attempts=attempts,
         backoff_seconds=backoff_seconds,
         exceptions=(requests.RequestException, ResponseParsingError, ValueError),
     )
-    def _call_and_parse() -> str:
+    def _call_and_parse() -> Union[str, Tuple[str, Dict[str, Any]]]:
         response = call_openai_api(
             user_msg=user_msg,
             context=context,
             model=model,
             text_format=text_format,
         )
-        return extract_text_from_response(response)
+        text = extract_text_from_response(response)
+        if return_full_response:
+            return text, response
+        return text
 
     return _call_and_parse()

@@ -19,7 +19,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
-from llm_client import ResponseParsingError, retry_call_openai
+from llm_client import ResponseParsingError, retry_call_openai, extract_reasoning_from_response
 
 CategoryInfo = Dict[str, object]
 
@@ -30,9 +30,11 @@ DEFAULT_OUTPUT_PARQUET = Path("output/classificacoes_relatorios.parquet")
 DEFAULT_OUTPUT_CSV = Path("output/classificacoes_relatorios.csv")
 DEFAULT_CLASSIFICATION_CACHE_PATH = Path("cache/classificacao_cache.json")
 DEFAULT_CATEGORIES_PATH = Path("cache/categorias.json")
+DEFAULT_REASONING_CLASSIFICATIONS_PATH = Path("cache/reasoning_classifications.jsonl")
+DEFAULT_REASONING_CATEGORIES_PATH = Path("cache/reasoning_categories.jsonl")
 DEFAULT_SYSTEM_PROMPT_PATH = Path("prompts/system_prompt.txt")
 DEFAULT_USER_PROMPT_TEMPLATE_PATH = Path("prompts/user_prompt_template.txt")
-DEFAULT_CSV_FLUSH_BATCH_SIZE = 100  # Flush to CSV every N rows
+DEFAULT_CSV_FLUSH_BATCH_SIZE = 10  # Flush to CSV every N rows
 CATEGORY_COLUMN_NAME = "Categoria da Solicitação"
 TARGET_COLUMN_NAME = "Solicitação"
 TEXT_FORMAT_SCHEMA: Dict[str, object] = {
@@ -43,6 +45,7 @@ TEXT_FORMAT_SCHEMA: Dict[str, object] = {
         "type": "object",
         "properties": {
             "categoria_escolhida": {"type": "string"},
+            "raciocinio_classificacao": {"type": "string"},
             "categorias_atualizadas": {
                 "type": "array",
                 "items": {
@@ -55,8 +58,9 @@ TEXT_FORMAT_SCHEMA: Dict[str, object] = {
                     "additionalProperties": False,
                 },
             },
+            "raciocinio_categorias": {"type": "string"},
         },
-        "required": ["categoria_escolhida", "categorias_atualizadas"],
+        "required": ["categoria_escolhida", "raciocinio_classificacao", "categorias_atualizadas", "raciocinio_categorias"],
         "additionalProperties": False,
     },
 }
@@ -293,6 +297,9 @@ class LLMClassifier:
         category_registry: CategoryRegistry,
         system_prompt: str,
         user_prompt_template: str,
+        reasoning_classifications_path: Path,
+        reasoning_categories_path: Path,
+        model: str = "gpt-5-mini",
         max_retries: int = 3,
         backoff_seconds: float = 2.0,
     ) -> None:
@@ -300,11 +307,18 @@ class LLMClassifier:
         self.category_registry = category_registry
         self.system_prompt = system_prompt
         self.user_prompt_template = user_prompt_template
+        self.reasoning_classifications_path = reasoning_classifications_path
+        self.reasoning_categories_path = reasoning_categories_path
+        self.model = model
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
         self.cache_hits = 0
         self.cache_misses = 0
         self.llm_times: List[float] = []  # Track LLM call durations
+        
+        # Ensure reasoning log directories exist
+        self.reasoning_classifications_path.parent.mkdir(parents=True, exist_ok=True)
+        self.reasoning_categories_path.parent.mkdir(parents=True, exist_ok=True)
 
     def classify(self, solicitacao: str) -> Tuple[str, bool, Optional[float]]:
         """Classify a solicitation and return (category, was_cached, llm_time)."""
@@ -328,23 +342,56 @@ class LLMClassifier:
         )
 
         start_time = time.time()
-        model_response = retry_call_openai(
+        model_response, full_response = retry_call_openai(
             user_msg=prompt,
             context=self.system_prompt,
             attempts=self.max_retries,
             backoff_seconds=self.backoff_seconds,
             text_format=TEXT_FORMAT_SCHEMA,
+            return_full_response=True,
         )
         LOGGER.debug("Raw model response (first 1000 chars): %s", model_response[:1000])
         LOGGER.debug("Model response type: %s", type(model_response))
+        
         parsed = self._parse_response(model_response)
+        
+        # Extract reasoning from the structured response (now part of the schema)
+        reasoning_classificacao = parsed.get("raciocinio_classificacao", "")
+        reasoning_categorias = parsed.get("raciocinio_categorias", "")
+        
+        LOGGER.debug("🧠 Reasoning (classification): %s chars", len(reasoning_classificacao))
+        LOGGER.debug("🧠 Reasoning (categories): %s chars", len(reasoning_categorias))
+        
+        # Get categories before and after update for change tracking
+        categories_before = set(self.category_registry.get_all().keys())
         self.category_registry.update_categories(parsed.get("categorias_atualizadas", []))
+        categories_after = set(self.category_registry.get_all().keys())
+        
+        # Log reasoning for category changes
+        new_categories = categories_after - categories_before
+        if new_categories:
+            self._log_reasoning_categories(
+                categories_updated=parsed.get("categorias_atualizadas", []),
+                reasoning=reasoning_categorias or "Nenhuma justificativa fornecida",
+                new_categories=list(new_categories),
+            )
+        
         categoria = parsed["categoria_escolhida"]
         if text_key:
             self.category_registry.add_example_to_category(categoria, text_key)
         
         elapsed_time = time.time() - start_time
         self.llm_times.append(elapsed_time)
+        
+        # Log reasoning for this classification
+        cache_key = _generate_cache_key(text_key)
+        self._log_reasoning_classification(
+            cache_key=cache_key,
+            solicitation=text_key,
+            category=categoria,
+            reasoning=reasoning_classificacao or "Nenhuma justificativa fornecida",
+            elapsed_time=elapsed_time,
+        )
         
         LOGGER.debug("Persistindo nova classificação no cache: categoria='%s'", categoria)
         self.cache.set(text_key, categoria, save_immediately=True)
@@ -358,6 +405,67 @@ class LLMClassifier:
         if not self.llm_times:
             return None
         return sum(self.llm_times) / len(self.llm_times)
+
+    def _log_reasoning_classification(
+        self,
+        cache_key: str,
+        solicitation: str,
+        category: str,
+        reasoning: str,
+        elapsed_time: float,
+    ) -> None:
+        """Append a classification reasoning entry to the JSONL log."""
+        from datetime import datetime
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "hash": cache_key,
+            "solicitation": solicitation[:100],  # First 100 chars
+            "category": category,
+            "reasoning": reasoning,
+            "model": self.model,
+            "cached": False,
+            "elapsed_time": round(elapsed_time, 3),
+        }
+        
+        try:
+            with open(self.reasoning_classifications_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            LOGGER.debug("📝 Reasoning logged for classification: %s -> %s", cache_key[:16], category)
+        except Exception as exc:
+            LOGGER.warning("Failed to log reasoning for classification: %s", exc)
+
+    def _log_reasoning_categories(
+        self,
+        categories_updated: List[object],
+        reasoning: str,
+        new_categories: List[str],
+    ) -> None:
+        """Append a category update reasoning entry to the JSONL log."""
+        from datetime import datetime
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "action": "updated" if not new_categories else "created",
+            "new_categories": new_categories,
+            "categories_updated": [
+                {
+                    "nome": cat.get("nome", "") if isinstance(cat, dict) else "",
+                    "descricao": cat.get("descricao", "")[:100] if isinstance(cat, dict) else "",
+                }
+                for cat in categories_updated
+            ],
+            "reasoning": reasoning,
+            "model": self.model,
+            "num_total_categories": len(self.category_registry.get_all()),
+        }
+        
+        try:
+            with open(self.reasoning_categories_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+            LOGGER.debug("📝 Reasoning logged for category update: %d categories affected", len(categories_updated))
+        except Exception as exc:
+            LOGGER.warning("Failed to log reasoning for categories: %s", exc)
 
     def _categories_as_json(self) -> str:
         categories_list = self._categories_as_list()
@@ -468,11 +576,14 @@ def process_workbooks(
     output_csv: Path,
     classification_cache_path: Path,
     categories_path: Path,
+    reasoning_classifications_path: Path,
+    reasoning_categories_path: Path,
     system_prompt: str,
     user_prompt_template: str,
+    model: str = "gpt-5-mini",
     max_retries: int = 3,
     backoff_seconds: float = 2.0,
-    csv_flush_batch_size: int = 100,
+    csv_flush_batch_size: int = 10,
 ) -> None:
     if not input_dir.exists():
         raise FileNotFoundError(f"Diretório de entrada não encontrado: {input_dir}")
@@ -515,6 +626,9 @@ def process_workbooks(
         CategoryRegistry(categories_path),
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
+        reasoning_classifications_path=reasoning_classifications_path,
+        reasoning_categories_path=reasoning_categories_path,
+        model=model,
         max_retries=max_retries,
         backoff_seconds=backoff_seconds,
     )
@@ -682,6 +796,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Arquivo JSON para registro de categorias (definições e exemplos)",
     )
     parser.add_argument(
+        "--reasoning-classifications",
+        type=Path,
+        default=DEFAULT_REASONING_CLASSIFICATIONS_PATH,
+        help="Arquivo JSONL para log de raciocínio das classificações",
+    )
+    parser.add_argument(
+        "--reasoning-categories",
+        type=Path,
+        default=DEFAULT_REASONING_CATEGORIES_PATH,
+        help="Arquivo JSONL para log de raciocínio das atualizações de categorias",
+    )
+    parser.add_argument(
         "--system-prompt",
         type=Path,
         default=DEFAULT_SYSTEM_PROMPT_PATH,
@@ -735,6 +861,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         output_csv=args.output_csv,
         classification_cache_path=args.classification_cache,
         categories_path=args.categories,
+        reasoning_classifications_path=args.reasoning_classifications,
+        reasoning_categories_path=args.reasoning_categories,
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
         max_retries=args.max_retries,
