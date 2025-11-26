@@ -27,10 +27,12 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_INPUT_DIR = Path("relatorios")
 DEFAULT_OUTPUT_PARQUET = Path("output/classificacoes_relatorios.parquet")
+DEFAULT_OUTPUT_CSV = Path("output/classificacoes_relatorios.csv")
 DEFAULT_CLASSIFICATION_CACHE_PATH = Path("cache/classificacao_cache.json")
 DEFAULT_CATEGORIES_PATH = Path("cache/categorias.json")
 DEFAULT_SYSTEM_PROMPT_PATH = Path("prompts/system_prompt.txt")
 DEFAULT_USER_PROMPT_TEMPLATE_PATH = Path("prompts/user_prompt_template.txt")
+DEFAULT_CSV_FLUSH_BATCH_SIZE = 100  # Flush to CSV every N rows
 CATEGORY_COLUMN_NAME = "Categoria da Solicitação"
 TARGET_COLUMN_NAME = "Solicitação"
 TEXT_FORMAT_SCHEMA: Dict[str, object] = {
@@ -463,12 +465,14 @@ def _normalize_solicitacao(value: object) -> str:
 def process_workbooks(
     input_dir: Path,
     output_parquet: Path,
+    output_csv: Path,
     classification_cache_path: Path,
     categories_path: Path,
     system_prompt: str,
     user_prompt_template: str,
     max_retries: int = 3,
     backoff_seconds: float = 2.0,
+    csv_flush_batch_size: int = 100,
 ) -> None:
     if not input_dir.exists():
         raise FileNotFoundError(f"Diretório de entrada não encontrado: {input_dir}")
@@ -515,7 +519,13 @@ def process_workbooks(
         backoff_seconds=backoff_seconds,
     )
     expected_columns: Optional[List[str]] = None
-    processed_frames: List[pd.DataFrame] = []
+    
+    # Prepare CSV output (batch-based incremental writing)
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    csv_initialized = False
+    batch_buffer: List[pd.DataFrame] = []  # Accumulate rows until batch size reached
+    rows_in_buffer = 0
+    total_rows_written_to_csv = 0  # Track cumulative rows written to CSV file
 
     total_requests = 0
     skipped_empty = 0
@@ -539,59 +549,98 @@ def process_workbooks(
             LOGGER.info("\n📊 Planilha '%s'%s: %d linhas", sheet_name, year_info, total_lines)
             LOGGER.info("-" * 70)
 
-            categorias: List[str] = []
+            # Process rows incrementally and flush in batches
             for idx, solicitacao in enumerate(frame[TARGET_COLUMN_NAME].tolist(), start=1):
                 normalized = _normalize_solicitacao(solicitacao)
                 if not normalized:
-                    categorias.append("")
+                    categoria = ""
                     skipped_empty += 1
                     global_row_counter += 1
                     global_percentage = (global_row_counter / total_rows_all_files) * 100
                     LOGGER.info("  [%d/%d | %.1f%%] %s (vazia - ignorada)", global_row_counter, total_rows_all_files, global_percentage, year_info)
-                    continue
-
-                total_requests += 1
-                global_row_counter += 1
-                global_percentage = (global_row_counter / total_rows_all_files) * 100
-                categoria, was_cached, llm_time = classifier.classify(normalized)
-                categorias.append(categoria)
+                else:
+                    total_requests += 1
+                    global_row_counter += 1
+                    global_percentage = (global_row_counter / total_rows_all_files) * 100
+                    categoria, was_cached, llm_time = classifier.classify(normalized)
+                    
+                    # Calculate ETA based on remaining rows and average LLM time
+                    remaining_rows = total_rows_all_files - global_row_counter
+                    avg_llm_time = classifier.get_average_llm_time()
+                    eta_str = ""
+                    if avg_llm_time and remaining_rows > 0:
+                        # Estimate time for remaining rows (assuming some will be cached)
+                        # Use conservative estimate: assume 50% cache hit rate for remaining
+                        estimated_seconds = remaining_rows * avg_llm_time * 0.5
+                        hours = estimated_seconds / 3600
+                        if hours >= 1:
+                            eta_str = f" | ETA: {hours:.1f}h"
+                        elif estimated_seconds >= 60:
+                            minutes = estimated_seconds / 60
+                            eta_str = f" | ETA: {minutes:.1f}m"
+                        else:
+                            eta_str = f" | ETA: {estimated_seconds:.0f}s"
+                    
+                    cache_status = "✓ cache" if was_cached else "🤖 LLM"
+                    time_info = f" ({llm_time:.2f}s)" if llm_time else ""
+                    LOGGER.info("  [%d/%d | %.1f%%] %s '%s' %s%s%s", global_row_counter, total_rows_all_files, global_percentage, year_info, categoria, cache_status, time_info, eta_str)
                 
-                # Calculate ETA based on remaining rows and average LLM time
-                remaining_rows = total_rows_all_files - global_row_counter
-                avg_llm_time = classifier.get_average_llm_time()
-                eta_str = ""
-                if avg_llm_time and remaining_rows > 0:
-                    # Estimate time for remaining rows (assuming some will be cached)
-                    # Use conservative estimate: assume 50% cache hit rate for remaining
-                    estimated_seconds = remaining_rows * avg_llm_time * 0.5
-                    hours = estimated_seconds / 3600
-                    if hours >= 1:
-                        eta_str = f" | ETA: {hours:.1f}h"
-                    elif estimated_seconds >= 60:
-                        minutes = estimated_seconds / 60
-                        eta_str = f" | ETA: {minutes:.1f}m"
+                # Create single-row dataframe and add to buffer
+                row_data = frame.iloc[[idx-1]].copy()
+                # Add category column with proper assignment
+                row_data.loc[row_data.index[0], CATEGORY_COLUMN_NAME] = categoria
+                row_data.insert(0, "Planilha", sheet_name)
+                row_data.insert(0, "Arquivo", workbook.name)
+                batch_buffer.append(row_data)
+                rows_in_buffer += 1
+                
+                # Flush batch to CSV if threshold reached
+                if rows_in_buffer >= csv_flush_batch_size:
+                    batch_df = pd.concat(batch_buffer, ignore_index=True)
+                    if not csv_initialized:
+                        batch_df.to_csv(output_csv, index=False, mode='w', encoding='utf-8', quoting=1, lineterminator='\n')
+                        csv_initialized = True
+                        total_rows_written_to_csv += len(batch_df)
+                        LOGGER.info("💾 CSV inicializado: %s", output_csv)
+                        LOGGER.info("💾 Flush: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
                     else:
-                        eta_str = f" | ETA: {estimated_seconds:.0f}s"
-                
-                cache_status = "✓ cache" if was_cached else "🤖 LLM"
-                time_info = f" ({llm_time:.2f}s)" if llm_time else ""
-                LOGGER.info("  [%d/%d | %.1f%%] %s '%s' %s%s%s", global_row_counter, total_rows_all_files, global_percentage, year_info, categoria, cache_status, time_info, eta_str)
-
-            frame[CATEGORY_COLUMN_NAME] = categorias
-            frame.insert(0, "Planilha", sheet_name)
-            frame.insert(0, "Arquivo", workbook.name)
-            processed_frames.append(frame)
+                        batch_df.to_csv(output_csv, index=False, mode='a', header=False, encoding='utf-8', quoting=1, lineterminator='\n')
+                        total_rows_written_to_csv += len(batch_df)
+                        LOGGER.info("💾 Flush: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
+                    
+                    batch_buffer = []
+                    rows_in_buffer = 0
+            
             LOGGER.info("-" * 70)
             LOGGER.info("✅ Planilha '%s'%s: concluída (%d linhas processadas)\n", sheet_name, year_info, total_lines)
 
-    if not processed_frames:
+    # Flush any remaining rows in buffer
+    if batch_buffer:
+        batch_df = pd.concat(batch_buffer, ignore_index=True)
+        if not csv_initialized:
+            batch_df.to_csv(output_csv, index=False, mode='w', encoding='utf-8', quoting=1, lineterminator='\n')
+            csv_initialized = True
+            total_rows_written_to_csv += len(batch_df)
+            LOGGER.info("💾 CSV inicializado: %s", output_csv)
+            LOGGER.info("💾 Flush final: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
+        else:
+            batch_df.to_csv(output_csv, index=False, mode='a', header=False, encoding='utf-8', quoting=1, lineterminator='\n')
+            total_rows_written_to_csv += len(batch_df)
+            LOGGER.info("💾 Flush final: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
+    
+    if not csv_initialized:
         raise ValueError("Nenhum arquivo .xls encontrado para processamento.")
 
-    combined = pd.concat(processed_frames, ignore_index=True)
+    # Convert CSV to Parquet
+    LOGGER.info("📦 Convertendo CSV para Parquet...")
+    combined = pd.read_csv(output_csv, encoding='utf-8')
     output_parquet.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(output_parquet, index=False)
+    LOGGER.info("✓ Parquet gerado: %s", output_parquet)
+    
     LOGGER.info(
-        "Processamento concluído. Saída: %s | Total solicitacoes: %s | Vazias ignoradas: %s | Cache hits: %s | Cache misses: %s",
+        "Processamento concluído. CSV: %s | Parquet: %s | Total solicitacoes: %s | Vazias ignoradas: %s | Cache hits: %s | Cache misses: %s",
+        output_csv,
         output_parquet,
         total_requests,
         skipped_empty,
@@ -613,6 +662,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_OUTPUT_PARQUET,
         help="Caminho do arquivo Parquet combinado a ser gerado",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=Path,
+        default=DEFAULT_OUTPUT_CSV,
+        help="Caminho do arquivo CSV intermediário (escrita incremental)",
     )
     parser.add_argument(
         "--classification-cache",
@@ -651,6 +706,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Tempo inicial de espera entre tentativas consecutivas",
     )
     parser.add_argument(
+        "--csv-flush-batch-size",
+        type=int,
+        default=DEFAULT_CSV_FLUSH_BATCH_SIZE,
+        help=f"Número de linhas a acumular antes de escrever no CSV (padrão: {DEFAULT_CSV_FLUSH_BATCH_SIZE})",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
@@ -671,12 +732,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     process_workbooks(
         input_dir=args.input_dir,
         output_parquet=args.output_parquet,
+        output_csv=args.output_csv,
         classification_cache_path=args.classification_cache,
         categories_path=args.categories,
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
         max_retries=args.max_retries,
         backoff_seconds=args.backoff_seconds,
+        csv_flush_batch_size=args.csv_flush_batch_size,
     )
 
 
