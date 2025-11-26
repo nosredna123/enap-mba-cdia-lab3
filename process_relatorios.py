@@ -96,8 +96,24 @@ class ClassificationCache:
     def get(self, key: str) -> Optional[Dict[str, object]]:
         return self.data.get(key)
 
-    def set(self, key: str, value: Dict[str, object]) -> None:
+    def set(self, key: str, value: Dict[str, object], *, save_immediately: bool = False) -> None:
+        """Set a cache entry and optionally persist to disk immediately.
+        
+        Args:
+            key: The cache key (normalized solicitation text)
+            value: The cache payload with classification result
+            save_immediately: If True, persist cache to disk after setting
+        
+        Raises:
+            IOError: If save_immediately=True and disk write fails
+        """
         self.data[key] = value
+        if save_immediately:
+            try:
+                self.save()
+            except Exception as exc:
+                LOGGER.error("Falha ao persistir cache após classificação: %s", exc)
+                raise
 
 
 class LLMClassifier:
@@ -131,8 +147,10 @@ class LLMClassifier:
                 if text_key:
                     self._add_example_to_category(cached_category, text_key)
                 self.cache_hits += 1
+                LOGGER.debug("Cache hit para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
                 return cached_category
         self.cache_misses += 1
+        LOGGER.debug("Cache miss para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
 
         categorias_json = self._categories_as_json()
         prompt = self.user_prompt_template.format(
@@ -160,7 +178,9 @@ class LLMClassifier:
                 required_examples={categoria: text_key if text_key else None}
             ),
         }
-        self.cache.set(text_key, cache_payload)
+        LOGGER.debug("Persistindo nova classificação no cache: categoria='%s'", categoria)
+        self.cache.set(text_key, cache_payload, save_immediately=True)
+        LOGGER.debug("Cache atualizado com sucesso. Total de entradas: %d", len(self.cache.data))
         return categoria
 
     def _categories_as_json(self) -> str:
@@ -354,16 +374,19 @@ def process_workbooks(
             LOGGER.info("  Planilha '%s': %s linhas", sheet_name, len(frame))
 
             categorias: List[str] = []
-            for solicitacao in frame[TARGET_COLUMN_NAME].tolist():
+            for idx, solicitacao in enumerate(frame[TARGET_COLUMN_NAME].tolist(), start=1):
                 normalized = _normalize_solicitacao(solicitacao)
                 if not normalized:
                     categorias.append("")
                     skipped_empty += 1
+                    LOGGER.debug("  Linha %d: solicitação vazia ignorada", idx)
                     continue
 
                 total_requests += 1
+                LOGGER.debug("  Linha %d: classificando solicitação...", idx)
                 categoria = classifier.classify(normalized)
                 categorias.append(categoria)
+                LOGGER.debug("  Linha %d: classificada como '%s'", idx, categoria)
 
             frame[CATEGORY_COLUMN_NAME] = categorias
             frame.insert(0, "Planilha", sheet_name)
@@ -376,7 +399,6 @@ def process_workbooks(
     combined = pd.concat(processed_frames, ignore_index=True)
     output_parquet.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(output_parquet, index=False)
-    classifier.cache.save()
     LOGGER.info(
         "Processamento concluído. Saída: %s | Total solicitacoes: %s | Vazias ignoradas: %s | Cache hits: %s | Cache misses: %s",
         output_parquet,
