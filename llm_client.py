@@ -39,8 +39,9 @@ def call_openai_api(
     response_as_json: bool = True,
     timeout: int = 180,
     max_output_tokens: Optional[int] = None,
-    max_output_tokens_cap: int = 4096,
+    max_output_tokens_cap: int = 16384,
     dotenv_path: Path | str = ".env",
+    text_format: Optional[Dict[str, Any]] = None,
 ) -> Union[Dict[str, Any], requests.Response]:
     """
     Call the OpenAI Responses API using the newest pattern.
@@ -72,6 +73,8 @@ def call_openai_api(
             Upper safety cap for max_output_tokens.
         dotenv_path:
             Optional path to a .env file containing ENAP_LAB3_OPENAI_API_TOKEN.
+        text_format:
+            Optional Responses API text.format payload (e.g., JSON schema).
 
     Returns:
         Parsed JSON dict (default) or the raw `requests.Response`.
@@ -127,18 +130,15 @@ def call_openai_api(
 
     def _build_input_messages(
         user_msg: str,
-        context: Optional[str] = None,
     ) -> List[Dict[str, str]]:
         """
         Build the `input` messages list for the Responses API.
 
-        Uses a system message for context (if provided) and a user message
-        for the actual prompt.
+        Uses a user message for the actual prompt; system/developer guidance
+        goes into the `instructions` field.
         """
 
         messages: List[Dict[str, str]] = []
-        if context is not None:
-            messages.append({"role": "system", "content": context})
         messages.append({"role": "user", "content": user_msg})
         return messages
 
@@ -161,12 +161,13 @@ def call_openai_api(
             return min(max_output_tokens, max_cap)
 
         estimated = estimate_number_of_tokens(messages)
-        return min(estimated, max_cap)
+        # Use a high minimum to avoid incomplete responses with structured output
+        return min(max(estimated, 4096), max_cap)
 
     api_key = _get_openai_api_key()
     headers = _build_headers(api_key)
 
-    input_messages = _build_input_messages(user_msg=user_msg, context=context)
+    input_messages = _build_input_messages(user_msg=user_msg)
     effective_max_output_tokens = _compute_max_output_tokens(
         messages=input_messages,
         max_output_tokens=max_output_tokens,
@@ -177,7 +178,13 @@ def call_openai_api(
         "model": model,
         "input": input_messages,
         "max_output_tokens": effective_max_output_tokens,
+        "tool_choice": "none",
     }
+    if context is not None:
+        payload["instructions"] = context
+    if text_format is not None:
+        payload.setdefault("text", {})
+        payload["text"]["format"] = text_format
 
     optional_params = {
         "temperature": temperature,
@@ -193,7 +200,18 @@ def call_openai_api(
         json=payload,
         timeout=timeout,
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        body = ""
+        try:
+            body = response.text
+        except Exception:
+            body = "<unavailable>"
+        raise requests.HTTPError(
+            f"{exc} | response body: {body}",
+            response=response,
+        ) from exc
 
     return response.json() if response_as_json else response
 
@@ -241,27 +259,68 @@ def extract_text_from_response(response: Union[Dict[str, Any], Any]) -> str:
     normalize the most common ones, raising a `ResponseParsingError` when no
     usable text is found.
     """
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.debug("Full response: %s", json.dumps(response, indent=2)[:2000])
 
-    if isinstance(response, dict):
-        if "output_text" in response and isinstance(response["output_text"], str):
-            return response["output_text"].strip()
+    if not isinstance(response, dict):
+        raise ResponseParsingError("Response is not a dictionary")
 
-        if "output" in response and isinstance(response["output"], list):
-            first_output = response["output"][0]
-            if isinstance(first_output, dict):
-                content = first_output.get("content")
-                if isinstance(content, list) and content:
-                    first_chunk = content[0]
-                    if isinstance(first_chunk, dict) and "text" in first_chunk:
-                        text_val = first_chunk["text"]
-                        if isinstance(text_val, str):
-                            return text_val.strip()
+    # Check if response is incomplete
+    if response.get("status") == "incomplete":
+        reason = response.get("incomplete_details", {}).get("reason", "unknown")
+        raise ResponseParsingError(f"Response incomplete: {reason}. Try increasing max_output_tokens or simplifying the prompt.")
 
-        if "choices" in response and isinstance(response["choices"], list):
-            choice0 = response["choices"][0]
-            message = choice0.get("message") if isinstance(choice0, dict) else None
-            if isinstance(message, dict):
-                content = message.get("content")
+    # Check for json_schema output with summary
+    if "output" in response and isinstance(response["output"], list):
+        for output_item in response["output"]:
+            if isinstance(output_item, dict) and output_item.get("type") == "json_schema":
+                if "summary" in output_item:
+                    summary = output_item["summary"]
+                    if isinstance(summary, dict):
+                        return json.dumps(summary, ensure_ascii=False)
+                    elif isinstance(summary, str):
+                        return summary.strip()
+
+    # Check for standard content structure in any output item
+    if "output" in response and isinstance(response["output"], list):
+        for output_item in response["output"]:
+            if isinstance(output_item, dict) and "content" in output_item:
+                content = output_item["content"]
+                if isinstance(content, list):
+                    for content_item in content:
+                        if isinstance(content_item, dict):
+                            # Check for output_text type
+                            if content_item.get("type") == "output_text" and "text" in content_item:
+                                text_val = content_item["text"]
+                                if isinstance(text_val, str):
+                                    return text_val.strip()
+                            # Check for json field
+                            if "json" in content_item:
+                                json_content = content_item["json"]
+                                if isinstance(json_content, dict):
+                                    return json.dumps(json_content, ensure_ascii=False)
+                                elif isinstance(json_content, str):
+                                    return json_content.strip()
+                            # Check for text field
+                            if "text" in content_item:
+                                text_val = content_item["text"]
+                                if isinstance(text_val, str):
+                                    return text_val.strip()
+
+    # Check for direct output_text
+    if "output_text" in response and isinstance(response["output_text"], str):
+        return response["output_text"].strip()
+
+    # Check for choices format (Chat Completions API)
+    if "choices" in response and isinstance(response["choices"], list) and response["choices"]:
+        choice0 = response["choices"][0]
+        if isinstance(choice0, dict) and "message" in choice0:
+            message = choice0["message"]
+            if isinstance(message, dict) and "content" in message:
+                content = message["content"]
                 if isinstance(content, str):
                     return content.strip()
 
@@ -274,6 +333,7 @@ def retry_call_openai(
     model: str = "gpt-5-mini",
     attempts: int = 3,
     backoff_seconds: float = 2.0,
+    text_format: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Call the API with retry/backoff using the generic decorator."""
 
@@ -283,7 +343,12 @@ def retry_call_openai(
         exceptions=(requests.RequestException, ResponseParsingError, ValueError),
     )
     def _call_and_parse() -> str:
-        response = call_openai_api(user_msg=user_msg, context=context, model=model)
+        response = call_openai_api(
+            user_msg=user_msg,
+            context=context,
+            model=model,
+            text_format=text_format,
+        )
         return extract_text_from_response(response)
 
     return _call_and_parse()

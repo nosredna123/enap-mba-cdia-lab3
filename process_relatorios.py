@@ -29,6 +29,31 @@ DEFAULT_SYSTEM_PROMPT_PATH = Path("prompts/system_prompt.txt")
 DEFAULT_USER_PROMPT_TEMPLATE_PATH = Path("prompts/user_prompt_template.txt")
 CATEGORY_COLUMN_NAME = "Categoria da Solicitação"
 TARGET_COLUMN_NAME = "Solicitação"
+TEXT_FORMAT_SCHEMA: Dict[str, object] = {
+    "type": "json_schema",
+    "name": "ClassificacaoSolicitacao",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "categoria_escolhida": {"type": "string"},
+            "categorias_atualizadas": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "nome": {"type": "string"},
+                        "descricao": {"type": "string"},
+                    },
+                    "required": ["nome", "descricao"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["categoria_escolhida", "categorias_atualizadas"],
+        "additionalProperties": False,
+    },
+}
 
 
 def _load_prompt(path: Path) -> str:
@@ -92,6 +117,8 @@ class LLMClassifier:
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
         self.categories: Dict[str, CategoryInfo] = {}
+        self.cache_hits = 0
+        self.cache_misses = 0
 
     def classify(self, solicitacao: str) -> str:
         text_key = solicitacao.strip() if solicitacao is not None else ""
@@ -103,7 +130,9 @@ class LLMClassifier:
                 self._merge_categories(cached_categories)
                 if text_key:
                     self._add_example_to_category(cached_category, text_key)
+                self.cache_hits += 1
                 return cached_category
+        self.cache_misses += 1
 
         categorias_json = self._categories_as_json()
         prompt = self.user_prompt_template.format(
@@ -116,7 +145,10 @@ class LLMClassifier:
             context=self.system_prompt,
             attempts=self.max_retries,
             backoff_seconds=self.backoff_seconds,
+            text_format=TEXT_FORMAT_SCHEMA,
         )
+        LOGGER.debug("Raw model response (first 1000 chars): %s", model_response[:1000])
+        LOGGER.debug("Model response type: %s", type(model_response))
         parsed = self._parse_response(model_response)
         self._merge_categories(parsed.get("categorias_atualizadas", []))
         categoria = parsed["categoria_escolhida"]
@@ -229,8 +261,11 @@ class LLMClassifier:
         try:
             parsed = json.loads(response_text)
         except json.JSONDecodeError as exc:
+            snippet = response_text[:500] + ("..." if len(response_text) > 500 else "")
+            LOGGER.error("JSON decode error at position %d: %s", exc.pos, exc.msg)
+            LOGGER.error("Full response text (%d chars): %s", len(response_text), response_text)
             raise ResponseParsingError(
-                f"Resposta do modelo não é JSON: {response_text}"
+                f"Resposta do modelo não é JSON válido: {exc.msg} na posição {exc.pos}"
             ) from exc
 
         categoria = parsed.get("categoria_escolhida")
@@ -306,6 +341,9 @@ def process_workbooks(
     expected_columns: Optional[List[str]] = None
     processed_frames: List[pd.DataFrame] = []
 
+    total_requests = 0
+    skipped_empty = 0
+
     for workbook in sorted(input_dir.glob("*.xls")):
         LOGGER.info("Processando arquivo: %s", workbook.name)
         sheets = pd.read_excel(workbook, sheet_name=None)
@@ -313,14 +351,17 @@ def process_workbooks(
             sheet_label = f"{workbook.name} / {sheet_name}"
             columns = [str(col) for col in frame.columns]
             expected_columns = _validate_columns(expected_columns, columns, sheet_label)
+            LOGGER.info("  Planilha '%s': %s linhas", sheet_name, len(frame))
 
             categorias: List[str] = []
             for solicitacao in frame[TARGET_COLUMN_NAME].tolist():
                 normalized = _normalize_solicitacao(solicitacao)
                 if not normalized:
                     categorias.append("")
+                    skipped_empty += 1
                     continue
 
+                total_requests += 1
                 categoria = classifier.classify(normalized)
                 categorias.append(categoria)
 
@@ -336,7 +377,14 @@ def process_workbooks(
     output_parquet.parent.mkdir(parents=True, exist_ok=True)
     combined.to_parquet(output_parquet, index=False)
     classifier.cache.save()
-    LOGGER.info("Processamento concluído. Saída: %s", output_parquet)
+    LOGGER.info(
+        "Processamento concluído. Saída: %s | Total solicitacoes: %s | Vazias ignoradas: %s | Cache hits: %s | Cache misses: %s",
+        output_parquet,
+        total_requests,
+        skipped_empty,
+        classifier.cache_hits,
+        classifier.cache_misses,
+    )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
