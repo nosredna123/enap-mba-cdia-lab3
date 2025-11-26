@@ -23,10 +23,6 @@ dist/
 .vscode/
 .idea/
 
-# Project outputs
-output/
-cache/
-
 # OS
 .DS_Store
 Thumbs.db
