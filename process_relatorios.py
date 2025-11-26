@@ -11,8 +11,9 @@ import argparse
 import json
 import logging
 import random
+import time
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -234,8 +235,10 @@ class LLMClassifier:
         self.backoff_seconds = backoff_seconds
         self.cache_hits = 0
         self.cache_misses = 0
+        self.llm_times: List[float] = []  # Track LLM call durations
 
-    def classify(self, solicitacao: str) -> str:
+    def classify(self, solicitacao: str) -> Tuple[str, bool, Optional[float]]:
+        """Classify a solicitation and return (category, was_cached)."""
         text_key = solicitacao.strip() if solicitacao is not None else ""
         cached_category = self.cache.get(text_key)
         if cached_category:
@@ -243,7 +246,7 @@ class LLMClassifier:
                 self.category_registry.add_example_to_category(cached_category, text_key)
             self.cache_hits += 1
             LOGGER.debug("Cache hit para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
-            return cached_category
+            return cached_category, True, None
         
         self.cache_misses += 1
         LOGGER.debug("Cache miss para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
@@ -254,6 +257,7 @@ class LLMClassifier:
             solicitacao=text_key or "(texto vazio)",
         )
 
+        start_time = time.time()
         model_response = retry_call_openai(
             user_msg=prompt,
             context=self.system_prompt,
@@ -269,12 +273,21 @@ class LLMClassifier:
         if text_key:
             self.category_registry.add_example_to_category(categoria, text_key)
         
+        elapsed_time = time.time() - start_time
+        self.llm_times.append(elapsed_time)
+        
         LOGGER.debug("Persistindo nova classificação no cache: categoria='%s'", categoria)
         self.cache.set(text_key, categoria, save_immediately=True)
         self.category_registry.save()
         LOGGER.debug("Cache e categorias atualizados. Total classificações: %d | Total categorias: %d", 
                      len(self.cache.data), len(self.category_registry.categories))
-        return categoria
+        return categoria, False, elapsed_time
+
+    def get_average_llm_time(self) -> Optional[float]:
+        """Get average LLM processing time in seconds."""
+        if not self.llm_times:
+            return None
+        return sum(self.llm_times) / len(self.llm_times)
 
     def _categories_as_json(self) -> str:
         categories_list = self._categories_as_list()
@@ -392,6 +405,39 @@ def process_workbooks(
     if not input_dir.exists():
         raise FileNotFoundError(f"Diretório de entrada não encontrado: {input_dir}")
 
+    # Preprocessing: collect file metadata and count total rows
+    LOGGER.info("🔍 Pré-processamento: analisando arquivos...")
+    file_metadata = []
+    total_rows_all_files = 0
+    
+    for workbook in sorted(input_dir.glob("*.xls")):
+        # Extract year from filename
+        year_match = None
+        for part in workbook.stem.split():
+            if part.isdigit() and len(part) == 4 and part.startswith(("19", "20")):
+                year_match = part
+                break
+        
+        # Quick read to count rows per sheet
+        sheets = pd.read_excel(workbook, sheet_name=None)
+        sheet_info = []
+        for sheet_name, frame in sheets.items():
+            row_count = len(frame)
+            sheet_info.append({
+                "name": sheet_name,
+                "rows": row_count,
+            })
+            total_rows_all_files += row_count
+        
+        file_metadata.append({
+            "path": workbook,
+            "year": year_match,
+            "sheets": sheet_info,
+        })
+    
+    LOGGER.info("📊 Total de arquivos: %d | Total de linhas: %d", len(file_metadata), total_rows_all_files)
+    LOGGER.info("")
+
     classifier = LLMClassifier(
         ClassificationCache(classification_cache_path),
         CategoryRegistry(categories_path),
@@ -405,15 +451,25 @@ def process_workbooks(
 
     total_requests = 0
     skipped_empty = 0
+    global_row_counter = 0
 
-    for workbook in sorted(input_dir.glob("*.xls")):
-        LOGGER.info("Processando arquivo: %s", workbook.name)
+    for file_meta in file_metadata:
+        workbook = file_meta["path"]
+        year_match = file_meta["year"]
+        year_info = f"[{year_match}]" if year_match else ""
+        
+        LOGGER.info("="*70)
+        LOGGER.info("Processando arquivo%s: %s", year_info, workbook.name)
+        LOGGER.info("="*70)
+        
         sheets = pd.read_excel(workbook, sheet_name=None)
         for sheet_name, frame in sheets.items():
             sheet_label = f"{workbook.name} / {sheet_name}"
             columns = [str(col) for col in frame.columns]
             expected_columns = _validate_columns(expected_columns, columns, sheet_label)
-            LOGGER.info("  Planilha '%s': %s linhas", sheet_name, len(frame))
+            total_lines = len(frame)
+            LOGGER.info("\n📊 Planilha '%s'%s: %d linhas", sheet_name, year_info, total_lines)
+            LOGGER.info("-" * 70)
 
             categorias: List[str] = []
             for idx, solicitacao in enumerate(frame[TARGET_COLUMN_NAME].tolist(), start=1):
@@ -421,19 +477,43 @@ def process_workbooks(
                 if not normalized:
                     categorias.append("")
                     skipped_empty += 1
-                    LOGGER.debug("  Linha %d: solicitação vazia ignorada", idx)
+                    global_row_counter += 1
+                    LOGGER.debug("  Linha %d/%d: solicitação vazia ignorada", idx, total_lines)
                     continue
 
                 total_requests += 1
-                LOGGER.debug("  Linha %d: classificando solicitação...", idx)
-                categoria = classifier.classify(normalized)
+                global_row_counter += 1
+                global_percentage = (global_row_counter / total_rows_all_files) * 100
+                categoria, was_cached, llm_time = classifier.classify(normalized)
                 categorias.append(categoria)
-                LOGGER.debug("  Linha %d: classificada como '%s'", idx, categoria)
+                
+                # Calculate ETA based on remaining rows and average LLM time
+                remaining_rows = total_rows_all_files - global_row_counter
+                avg_llm_time = classifier.get_average_llm_time()
+                eta_str = ""
+                if avg_llm_time and remaining_rows > 0:
+                    # Estimate time for remaining rows (assuming some will be cached)
+                    # Use conservative estimate: assume 50% cache hit rate for remaining
+                    estimated_seconds = remaining_rows * avg_llm_time * 0.5
+                    hours = estimated_seconds / 3600
+                    if hours >= 1:
+                        eta_str = f" | ETA: {hours:.1f}h"
+                    elif estimated_seconds >= 60:
+                        minutes = estimated_seconds / 60
+                        eta_str = f" | ETA: {minutes:.1f}m"
+                    else:
+                        eta_str = f" | ETA: {estimated_seconds:.0f}s"
+                
+                cache_status = "✓ cache" if was_cached else "🤖 LLM"
+                time_info = f" ({llm_time:.2f}s)" if llm_time else ""
+                LOGGER.info("  [%d/%d | %.1f%%] %s '%s' %s%s%s", global_row_counter, total_rows_all_files, global_percentage, year_info, categoria, cache_status, time_info, eta_str)
 
             frame[CATEGORY_COLUMN_NAME] = categorias
             frame.insert(0, "Planilha", sheet_name)
             frame.insert(0, "Arquivo", workbook.name)
             processed_frames.append(frame)
+            LOGGER.info("-" * 70)
+            LOGGER.info("✅ Planilha '%s'%s: concluída (%d linhas processadas)\n", sheet_name, year_info, total_lines)
 
     if not processed_frames:
         raise ValueError("Nenhum arquivo .xls encontrado para processamento.")
