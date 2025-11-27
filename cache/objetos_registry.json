@@ -1,0 +1,36 @@
+{
+  "pontes": {
+    "descricao": "Estruturas de transposição sobre rios, vales ou vias, incluindo viadutos e pontilhões.",
+    "exemplos": [
+      "CHUVA DE GRANDE INTENSIDADE NO DIA DE 12/04/2017, INICIOU-SE POR VOLTA DAS 14:30HRS E COM TERMINO AS 16:20HRS, O\r\nRIBEIRÃO SÃO DOMINGOS FICOU NO SEU LIMITE DE CAPACIDADE, E QUE DEVIDO A ISSO HOUVE PONTOS DE ALAGAMENTO, POREM NO ITEM 1º HOUVE A QUEDA DE UMA PONTE DE SUMA IMPORTÂNCIA QUE RECEBE GRANDE FLUXO DE VEÍCULOS\r\nUMA VEZ QUE ALI É CONSIDERADO O CORAÇÃO DO MUNICÍPIO E PONTO DE REFERENCIA PARA A CHEGADA DE VÁRIOS BAIRROS E QUE\r\nDÁ ACESSO A TODA A PARTE DE ESTRUTURA E LOGÍSTICA DO MUNICÍPIO DE CATANDUVA (BANCOS, PREFEITURA, COMÉRCIOS,\r\nHOSPITAIS, TERMINAIS DE ÔNIBUS, CÂMARA MUNICIPAL, SUPERMERCADOS). ESSES FATOS VEM SE REPETINDO CONFORME ENCHENTES\r\nEM 2008 E 2016.\r\n- ESSAS CHUVAS OCASIONARAM ENCHENTES EM VARIAS CASAS, DEVIDO A UM ESTRANGULAMENTO DA PASSAGEM DE ÁGUAS DO CÓRREGO BOA VISTA SOB OS TRILHOS DA FEPASA. PARA TANTO, NECESSITAMOS A AMPLIAÇÃO DESSA PASSAGEM, ATRAVES DE UMA GALERIA, CONSTRUIDA DE FORMA NÃO DESTRUTIVA, SOB ESSES TRILHOS.",
+      "O município de Itaituba-Pará passou por um período de inverno muito forte neste ano com chuvas intensas que ocorrem com acumulados significativos, causando múltiplos desastres como, por exemplo, enxurradas, inundações e movimento de massas, deslizamentos etc... Devido às chuvas intensas o nível do rio tapajós cresceu acima 8.90 m atingindo varias localidades as suas margens e deixando pontes submersas e danificadas causando estragos nas suas edificações, vias de acesso ficaram intrafegáveis isolando comunidades e prejudicando seus acessos, além das erosões que aparecem pelo acumulo de águas em vias com extrapolação da capacidade de escoamento.",
+      "AÇÕES DE RECUPERAÇÃO - Desastre por ENXURRADAS -  Decreto Municipal nº. 4768, de 04 de janeiro de 2017.\r\nOBJETO: Obras de reconstrução de pontilhões no interior do município de São Jerônimo"
+    ]
+  },
+  "bueiros e galerias": {
+    "descricao": "Sistemas de drenagem pluvial subterrânea, como bueiros, galerias e tubulações de escoamento.",
+    "exemplos": []
+  },
+  "pavimentação": {
+    "descricao": "Revestimento de vias urbanas e rurais, incluindo asfalto, concreto e paralelepípedos.",
+    "exemplos": [
+      "Recuperação de áreas degradas e de instabilidade geotécnica, incluindo terraplanagem, estabilização de solo via gabião, execução de drenagem superficial e profunda e pavimentação de vias entorno da Rua Joaquim Marques da Silva, Bairro Centro - Cidade de São Tiago/MG.",
+      "RECONSTRUÇÃO DE FORMA DEFINITIVA DE OBRAS DE INFRAESTRUTURA NA ZONA RURAL DE SANTA MARIA DAS BARREIRAS"
+    ]
+  },
+  "unidades habitacionais": {
+    "descricao": "Moradias residenciais unifamiliares ou multifamiliares afetadas pelo desastre.",
+    "exemplos": [
+      "a. Realocação de famílias ribeirinhas moradias afetadas pelo desastre, reconhecido pela Portaria n°55/2017 do Secretário Nacional de Proteção e Defesa Civil.",
+      "Plano de trabalho referente a Enxurrada ocorrida no dia 05/01/2017 no município de Brusque Santa Catarina, visando a obtenção de recursos Federais para reconstrução de 08 Unidades habitacionais, a serem reconstruídas em locais diferentes dos afetados pelo desastre mencionado, em local a ser definido pelo município.\r\nMeta 01 - Reconstrução de residência afetada por deslizamento, Localizada na Rua Nicolau Lauritizem, Bairro Guarani;\r\nMeta 02 - Reconstrução de residência atingida por deslizamento, localizada a Rua Luiz Rafael Flor, nº 180, Bairro Nova Brasilia;\r\nMeta 03 - Reconstrução de residência afetada estruturalmente por alagamento, Localizada a Rua Joaquim Zucco, nº 656, Bairro Nova Brasilia;\r\nMeta 04 - Reconstrução de residencia atingida por deslizamento, Localizada a Rua Florêncio Day, Bairro Azambuja;\r\nMeta 05 - Reconstrução de residência Multifamiliar, composta por 04 Unidades habitacionais, Afetada por erosões em virtude das enxurradas, Localizada a Rua José Winter, nº273."
+    ]
+  },
+  "edificações/prédios públicos": {
+    "descricao": "Construções públicas como escolas, postos de saúde e centros comunitários.",
+    "exemplos": [
+      "Obras de reconstrução de infraestrutura pública destruída pelo desastre reconhecido pela Portaria nº 75/2017 de 12 de junho de 2017, do\r\nSenhor Secretário Nacional de Proteção e Defesa Civil, do evento ocorrido no dia 30 de maio de 2017, no Município de Sinimbu/RS",
+      "Obras de reconstrução de infraestrutura Publica destruídas pelo desastre reconhecido pela portaria 60 de 11 de Maio de 2017.",
+      "OBRAS DE RECONSTRUÇÃO DE INFRAESTRUTURA PÚBLICA DESTRUÍDAS PELO DESASTRE reconhecido pela Portaria nº 19 de 15 de fevereiro de 2017 do Senhor Secretário Nacional de Proteção e Defesa Civil."
+    ]
+  }
+}

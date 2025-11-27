@@ -1,9 +1,9 @@
-"""Classify solicitações across all `.xls` files in `relatorios`.
+"""Extract physical objects from solicitações across all `.xls` files in `relatorios`.
 
 The script iterates over every workbook, validates that all sheets share the
 same structure (fail-fast on mismatches), calls the gpt-5-mini model to
-classify the "Solicitação" column, and emits a combined Parquet file with the
-new category column written in Brazilian Portuguese.
+extract the physical object from the "Solicitação" column, and emits a combined
+Parquet file with the new "Objeto da Solicitação" column written in Brazilian Portuguese.
 """
 from __future__ import annotations
 
@@ -28,25 +28,25 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_INPUT_DIR = Path("relatorios")
 DEFAULT_OUTPUT_PARQUET = Path("output/classificacoes_relatorios.parquet")
 DEFAULT_OUTPUT_CSV = Path("output/classificacoes_relatorios.csv")
-DEFAULT_CLASSIFICATION_CACHE_PATH = Path("cache/classificacao_cache.json")
-DEFAULT_CATEGORIES_PATH = Path("cache/categorias.json")
-DEFAULT_REASONING_CLASSIFICATIONS_PATH = Path("cache/reasoning_classifications.jsonl")
-DEFAULT_REASONING_CATEGORIES_PATH = Path("cache/reasoning_categories.jsonl")
+DEFAULT_OBJECT_CACHE_PATH = Path("cache/objetos_cache.json")
+DEFAULT_OBJECTS_PATH = Path("cache/objetos_registry.json")
+DEFAULT_REASONING_OBJECTS_PATH = Path("cache/reasoning_objetos.jsonl")
+DEFAULT_REASONING_OBJECTS_REGISTRY_PATH = Path("cache/reasoning_objetos_registry.jsonl")
 DEFAULT_SYSTEM_PROMPT_PATH = Path("prompts/system_prompt.txt")
 DEFAULT_USER_PROMPT_TEMPLATE_PATH = Path("prompts/user_prompt_template.txt")
 DEFAULT_CSV_FLUSH_BATCH_SIZE = 10  # Flush to CSV every N rows
-CATEGORY_COLUMN_NAME = "Categoria da Solicitação"
+OBJECT_COLUMN_NAME = "Objeto da Solicitação"
 TARGET_COLUMN_NAME = "Solicitação"
 TEXT_FORMAT_SCHEMA: Dict[str, object] = {
     "type": "json_schema",
-    "name": "ClassificacaoSolicitacao",
+    "name": "ExtracaoObjetoSolicitacao",
     "strict": True,
     "schema": {
         "type": "object",
         "properties": {
-            "categoria_escolhida": {"type": "string"},
-            "raciocinio_classificacao": {"type": "string"},
-            "categorias_atualizadas": {
+            "objeto_escolhido": {"type": "string"},
+            "raciocinio_objeto": {"type": "string"},
+            "objetos_atualizados": {
                 "type": "array",
                 "items": {
                     "type": "object",
@@ -58,9 +58,9 @@ TEXT_FORMAT_SCHEMA: Dict[str, object] = {
                     "additionalProperties": False,
                 },
             },
-            "raciocinio_categorias": {"type": "string"},
+            "raciocinio_objetos": {"type": "string"},
         },
-        "required": ["categoria_escolhida", "raciocinio_classificacao", "categorias_atualizadas", "raciocinio_categorias"],
+        "required": ["objeto_escolhido", "raciocinio_objeto", "objetos_atualizados", "raciocinio_objetos"],
         "additionalProperties": False,
     },
 }
@@ -103,10 +103,10 @@ def _load_prompt(path: Path) -> str:
     return content
 
 
-class ClassificationCache:
-    """Hash-based cache that maps normalized solicitation text to category names.
+class ObjectCache:
+    """Hash-based cache that maps normalized solicitation text to object names.
     
-    Cache structure: {hash: {"category": str, "original": str}}
+    Cache structure: {hash: {"object": str, "original": str}}
     """
 
     def __init__(self, path: Path) -> None:
@@ -124,17 +124,23 @@ class ClassificationCache:
                 self.data = {}
                 return
             
-            # Migrate old format (text: category) to new format (hash: {category, original})
+            # Migrate old format (text: object) to new format (hash: {object, original})
             self.data = {}
             for key, value in loaded.items():
-                if isinstance(value, dict) and "category" in value:
+                if isinstance(value, dict) and "object" in value:
                     # New format - use as-is
                     self.data[key] = value
+                elif isinstance(value, dict) and "category" in value:
+                    # Old category format - migrate to object format
+                    self.data[key] = {
+                        "object": value["category"],
+                        "original": value.get("original", key)
+                    }
                 elif isinstance(value, str):
                     # Old format - migrate by generating hash from key
                     cache_key = _generate_cache_key(key)
                     self.data[cache_key] = {
-                        "category": value,
+                        "object": value,
                         "original": key
                     }
                     LOGGER.debug("Migrated old cache entry to hash-based format")
@@ -151,57 +157,63 @@ class ClassificationCache:
         self.path.write_text(cache_body, encoding="utf-8")
 
     def get(self, text: str) -> Optional[str]:
-        """Get the category name for a solicitation text.
+        """Get the object name for a solicitation text.
         
         Args:
             text: The original solicitation text
             
         Returns:
-            The category name if found in cache, None otherwise
+            The object name if found in cache, None otherwise
         """
         cache_key = _generate_cache_key(text)
         entry = self.data.get(cache_key)
         if entry:
-            return entry["category"]
+            return entry["object"]
         return None
 
-    def set(self, text: str, category: str, *, save_immediately: bool = False) -> None:
-        """Set a classification result and optionally persist to disk immediately.
+    def set(self, text: str, objeto: str, *, save_immediately: bool = False) -> None:
+        """Set an object extraction result and optionally persist to disk immediately.
         
         Args:
             text: The original solicitation text
-            category: The category name assigned to this solicitation
+            objeto: The object name extracted from this solicitation
             save_immediately: If True, persist cache to disk after setting
         
         Raises:
             IOError: If save_immediately=True and disk write fails
         """
         cache_key = _generate_cache_key(text)
-        # Store both category and original text (for first occurrence)
+        # Store both object and original text (for first occurrence)
         if cache_key not in self.data:
             self.data[cache_key] = {
-                "category": category,
+                "object": objeto,
                 "original": text[:200]  # Store first 200 chars as reference
             }
         else:
-            # Update category if it changed
-            self.data[cache_key]["category"] = category
+            # Update object if it changed
+            self.data[cache_key]["object"] = objeto
         
         if save_immediately:
             try:
                 self.save()
             except Exception as exc:
-                LOGGER.error("Falha ao persistir cache após classificação: %s", exc)
+                LOGGER.error("Falha ao persistir cache após extração: %s", exc)
                 raise
 
 
-class CategoryRegistry:
-    """Registry that maintains category definitions with descriptions and examples."""
+class ObjectRegistry:
+    """Registry that maintains object definitions with descriptions and examples.
+    
+    Initializes with seed data if registry is empty.
+    """
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        self.categories: Dict[str, CategoryInfo] = {}
+        self.objects: Dict[str, CategoryInfo] = {}  # CategoryInfo type alias reused for objects
         self._load()
+        # Seed with base objects if empty
+        if not self.objects:
+            self._seed_base_objects()
 
     def _load(self) -> None:
         if not self.path.exists():
@@ -209,39 +221,67 @@ class CategoryRegistry:
         try:
             loaded = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
-                self.categories = loaded
+                self.objects = loaded
             else:
-                LOGGER.warning("Categories file %s has invalid format; starting fresh", self.path)
-                self.categories = {}
+                LOGGER.warning("Objects file %s has invalid format; starting fresh", self.path)
+                self.objects = {}
         except json.JSONDecodeError:
             LOGGER.warning(
-                "Categories file %s is not valid JSON; starting fresh",
+                "Objects file %s is not valid JSON; starting fresh",
                 self.path,
             )
-            self.categories = {}
+            self.objects = {}
+    
+    def _seed_base_objects(self) -> None:
+        """Initialize registry with base object types."""
+        LOGGER.info("🌱 Inicializando registro com objetos base...")
+        self.objects = {
+            "pontes": {
+                "descricao": "Estruturas de transposição sobre rios, vales ou vias, incluindo pontes, viadutos e pontilhões.",
+                "exemplos": []
+            },
+            "bueiros e galerias": {
+                "descricao": "Sistemas de drenagem pluvial subterrânea, incluindo bueiros, galerias e tubulações de escoamento.",
+                "exemplos": []
+            },
+            "pavimentação": {
+                "descricao": "Revestimento de vias urbanas e rurais, incluindo asfalto, concreto, paralelepípedos e lajotas.",
+                "exemplos": []
+            },
+            "unidades habitacionais": {
+                "descricao": "Moradias residenciais unifamiliares ou multifamiliares destruídas ou danificadas.",
+                "exemplos": []
+            },
+            "edificações/prédios públicos": {
+                "descricao": "Construções públicas como escolas, postos de saúde, ginásios, centros comunitários e equipamentos públicos.",
+                "exemplos": []
+            }
+        }
+        self.save()
+        LOGGER.info("✅ Registro inicializado com %d objetos base", len(self.objects))
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        categories_body = json.dumps(self.categories, ensure_ascii=False, indent=2)
-        self.path.write_text(categories_body, encoding="utf-8")
+        objects_body = json.dumps(self.objects, ensure_ascii=False, indent=2)
+        self.path.write_text(objects_body, encoding="utf-8")
 
     def get_all(self) -> Dict[str, CategoryInfo]:
-        """Return all categories."""
-        return self.categories
+        """Return all objects."""
+        return self.objects
 
-    def update_categories(self, new_categories: Sequence[object]) -> None:
-        """Merge new category definitions into the registry."""
-        for raw in new_categories:
+    def update_objects(self, new_objects: Sequence[object]) -> None:
+        """Merge new object definitions into the registry."""
+        for raw in new_objects:
             if not isinstance(raw, dict):
-                raise ResponseParsingError("Elemento de categoria inválido; esperado objeto JSON.")
-            name = str(raw.get("nome", "")).strip()
+                raise ResponseParsingError("Elemento de objeto inválido; esperado objeto JSON.")
+            name = str(raw.get("nome", "")).strip().lower()  # Lowercase for consistency
             description = str(raw.get("descricao", "")).strip()
             examples_raw = raw.get("exemplos", [])
             
             if not name:
-                raise ResponseParsingError("Categoria sem nome fornecido.")
+                raise ResponseParsingError("Objeto sem nome fornecido.")
             if not description:
-                raise ResponseParsingError("Categoria sem descrição fornecida.")
+                raise ResponseParsingError("Objeto sem descrição fornecida.")
             if examples_raw is None:
                 examples_raw = []
             if not isinstance(examples_raw, list):
@@ -249,7 +289,7 @@ class CategoryRegistry:
             
             new_examples = [str(ex).strip() for ex in examples_raw if str(ex).strip()]
             
-            existing = self.categories.get(name, {"descricao": "", "exemplos": []})
+            existing = self.objects.get(name, {"descricao": "", "exemplos": []})
             updated_description = description or existing.get("descricao", "")
             existing_examples = existing.get("exemplos", []) if isinstance(existing.get("exemplos"), list) else []
             
@@ -265,14 +305,15 @@ class CategoryRegistry:
             if len(merged_examples) > 3:
                 merged_examples = random.sample(merged_examples, 3)
             
-            self.categories[name] = {
+            self.objects[name] = {
                 "descricao": updated_description,
                 "exemplos": merged_examples,
             }
 
-    def add_example_to_category(self, category_name: str, example: str) -> None:
-        """Add an example to a category, placing it first and limiting to 3 total examples."""
-        current = self.categories.get(category_name, {"descricao": "", "exemplos": []})
+    def add_example_to_object(self, object_name: str, example: str) -> None:
+        """Add an example to an object, placing it first and limiting to 3 total examples."""
+        object_name_lower = object_name.lower()  # Normalize to lowercase
+        current = self.objects.get(object_name_lower, {"descricao": "", "exemplos": []})
         examples = current.get("exemplos", []) if isinstance(current.get("exemplos"), list) else []
         # Remove if already exists to avoid duplicates
         updated_examples = [example] + [ex for ex in examples if ex != example]
@@ -282,33 +323,33 @@ class CategoryRegistry:
             remaining = updated_examples[1:]
             sampled = random.sample(remaining, min(2, len(remaining)))
             updated_examples = [example] + sampled
-        self.categories[category_name] = {
+        self.objects[object_name_lower] = {
             "descricao": current.get("descricao", ""),
             "exemplos": updated_examples,
         }
 
 
-class LLMClassifier:
-    """Wraps prompting, parsing, caching, and category tracking."""
+class LLMObjectExtractor:
+    """Wraps prompting, parsing, caching, and object extraction tracking."""
 
     def __init__(
         self,
-        cache: ClassificationCache,
-        category_registry: CategoryRegistry,
+        cache: ObjectCache,
+        object_registry: ObjectRegistry,
         system_prompt: str,
         user_prompt_template: str,
-        reasoning_classifications_path: Path,
-        reasoning_categories_path: Path,
+        reasoning_objects_path: Path,
+        reasoning_objects_registry_path: Path,
         model: str = "gpt-5-mini",
         max_retries: int = 3,
         backoff_seconds: float = 2.0,
     ) -> None:
         self.cache = cache
-        self.category_registry = category_registry
+        self.object_registry = object_registry
         self.system_prompt = system_prompt
         self.user_prompt_template = user_prompt_template
-        self.reasoning_classifications_path = reasoning_classifications_path
-        self.reasoning_categories_path = reasoning_categories_path
+        self.reasoning_objects_path = reasoning_objects_path
+        self.reasoning_objects_registry_path = reasoning_objects_registry_path
         self.model = model
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
@@ -317,27 +358,27 @@ class LLMClassifier:
         self.llm_times: List[float] = []  # Track LLM call durations
         
         # Ensure reasoning log directories exist
-        self.reasoning_classifications_path.parent.mkdir(parents=True, exist_ok=True)
-        self.reasoning_categories_path.parent.mkdir(parents=True, exist_ok=True)
+        self.reasoning_objects_path.parent.mkdir(parents=True, exist_ok=True)
+        self.reasoning_objects_registry_path.parent.mkdir(parents=True, exist_ok=True)
 
-    def classify(self, solicitacao: str) -> Tuple[str, bool, Optional[float]]:
-        """Classify a solicitation and return (category, was_cached, llm_time)."""
+    def extract_object(self, solicitacao: str) -> Tuple[str, bool, Optional[float]]:
+        """Extract object from solicitation and return (object_name, was_cached, llm_time)."""
         text_key = solicitacao.strip() if solicitacao is not None else ""
-        cached_category = self.cache.get(text_key)
-        if cached_category:
+        cached_object = self.cache.get(text_key)
+        if cached_object:
             if text_key:
-                self.category_registry.add_example_to_category(cached_category, text_key)
+                self.object_registry.add_example_to_object(cached_object, text_key)
             self.cache_hits += 1
             normalized = _normalize_text(text_key)
-            LOGGER.debug("Cache hit (normalized: '%s...') -> '%s'", normalized[:50], cached_category)
-            return cached_category, True, None
+            LOGGER.debug("Cache hit (normalized: '%s...') -> '%s'", normalized[:50], cached_object)
+            return cached_object, True, None
         
         self.cache_misses += 1
         LOGGER.debug("Cache miss para solicitação (primeiros 50 chars): '%s...'", text_key[:50])
 
-        categorias_json = self._categories_as_json()
+        objetos_json = self._objects_as_json()
         prompt = self.user_prompt_template.format(
-            categorias_atual=categorias_json,
+            objetos_atuais=objetos_json,
             solicitacao=text_key or "(texto vazio)",
         )
 
@@ -356,49 +397,49 @@ class LLMClassifier:
         parsed = self._parse_response(model_response)
         
         # Extract reasoning from the structured response (now part of the schema)
-        reasoning_classificacao = parsed.get("raciocinio_classificacao", "")
-        reasoning_categorias = parsed.get("raciocinio_categorias", "")
+        reasoning_objeto = parsed.get("raciocinio_objeto", "")
+        reasoning_objetos = parsed.get("raciocinio_objetos", "")
         
-        LOGGER.debug("🧠 Reasoning (classification): %s chars", len(reasoning_classificacao))
-        LOGGER.debug("🧠 Reasoning (categories): %s chars", len(reasoning_categorias))
+        LOGGER.debug("🧠 Reasoning (object): %s chars", len(reasoning_objeto))
+        LOGGER.debug("🧠 Reasoning (objects registry): %s chars", len(reasoning_objetos))
         
-        # Get categories before and after update for change tracking
-        categories_before = set(self.category_registry.get_all().keys())
-        self.category_registry.update_categories(parsed.get("categorias_atualizadas", []))
-        categories_after = set(self.category_registry.get_all().keys())
+        # Get objects before and after update for change tracking
+        objects_before = set(self.object_registry.get_all().keys())
+        self.object_registry.update_objects(parsed.get("objetos_atualizados", []))
+        objects_after = set(self.object_registry.get_all().keys())
         
-        # Log reasoning for category changes
-        new_categories = categories_after - categories_before
-        if new_categories:
-            self._log_reasoning_categories(
-                categories_updated=parsed.get("categorias_atualizadas", []),
-                reasoning=reasoning_categorias or "Nenhuma justificativa fornecida",
-                new_categories=list(new_categories),
+        # Log reasoning for object changes
+        new_objects = objects_after - objects_before
+        if new_objects:
+            self._log_reasoning_objects_registry(
+                objects_updated=parsed.get("objetos_atualizados", []),
+                reasoning=reasoning_objetos or "Nenhuma justificativa fornecida",
+                new_objects=list(new_objects),
             )
         
-        categoria = parsed["categoria_escolhida"]
+        objeto = parsed["objeto_escolhido"]
         if text_key:
-            self.category_registry.add_example_to_category(categoria, text_key)
+            self.object_registry.add_example_to_object(objeto, text_key)
         
         elapsed_time = time.time() - start_time
         self.llm_times.append(elapsed_time)
         
-        # Log reasoning for this classification
+        # Log reasoning for this object extraction
         cache_key = _generate_cache_key(text_key)
-        self._log_reasoning_classification(
+        self._log_reasoning_object(
             cache_key=cache_key,
             solicitation=text_key,
-            category=categoria,
-            reasoning=reasoning_classificacao or "Nenhuma justificativa fornecida",
+            objeto=objeto,
+            reasoning=reasoning_objeto or "Nenhuma justificativa fornecida",
             elapsed_time=elapsed_time,
         )
         
-        LOGGER.debug("Persistindo nova classificação no cache: categoria='%s'", categoria)
-        self.cache.set(text_key, categoria, save_immediately=True)
-        self.category_registry.save()
-        LOGGER.debug("Cache e categorias atualizados. Total classificações: %d | Total categorias: %d", 
-                     len(self.cache.data), len(self.category_registry.categories))
-        return categoria, False, elapsed_time
+        LOGGER.debug("Persistindo nova extração no cache: objeto='%s'", objeto)
+        self.cache.set(text_key, objeto, save_immediately=True)
+        self.object_registry.save()
+        LOGGER.debug("Cache e objetos atualizados. Total extrações: %d | Total objetos: %d", 
+                     len(self.cache.data), len(self.object_registry.objects))
+        return objeto, False, elapsed_time
 
     def get_average_llm_time(self) -> Optional[float]:
         """Get average LLM processing time in seconds."""
@@ -406,22 +447,22 @@ class LLMClassifier:
             return None
         return sum(self.llm_times) / len(self.llm_times)
 
-    def _log_reasoning_classification(
+    def _log_reasoning_object(
         self,
         cache_key: str,
         solicitation: str,
-        category: str,
+        objeto: str,
         reasoning: str,
         elapsed_time: float,
     ) -> None:
-        """Append a classification reasoning entry to the JSONL log."""
+        """Append an object extraction reasoning entry to the JSONL log."""
         from datetime import datetime
         
         log_entry = {
             "timestamp": datetime.now().isoformat(),
             "hash": cache_key,
             "solicitation": solicitation[:100],  # First 100 chars
-            "category": category,
+            "objeto": objeto,
             "reasoning": reasoning,
             "model": self.model,
             "cached": False,
@@ -429,70 +470,70 @@ class LLMClassifier:
         }
         
         try:
-            with open(self.reasoning_classifications_path, "a", encoding="utf-8") as f:
+            with open(self.reasoning_objects_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-            LOGGER.debug("📝 Reasoning logged for classification: %s -> %s", cache_key[:16], category)
+            LOGGER.debug("📝 Reasoning logged for object extraction: %s -> %s", cache_key[:16], objeto)
         except Exception as exc:
-            LOGGER.warning("Failed to log reasoning for classification: %s", exc)
+            LOGGER.warning("Failed to log reasoning for object extraction: %s", exc)
 
-    def _log_reasoning_categories(
+    def _log_reasoning_objects_registry(
         self,
-        categories_updated: List[object],
+        objects_updated: List[object],
         reasoning: str,
-        new_categories: List[str],
+        new_objects: List[str],
     ) -> None:
-        """Append a category update reasoning entry to the JSONL log."""
+        """Append an object registry update reasoning entry to the JSONL log."""
         from datetime import datetime
         
         log_entry = {
             "timestamp": datetime.now().isoformat(),
-            "action": "updated" if not new_categories else "created",
-            "new_categories": new_categories,
-            "categories_updated": [
+            "action": "updated" if not new_objects else "created",
+            "new_objects": new_objects,
+            "objects_updated": [
                 {
-                    "nome": cat.get("nome", "") if isinstance(cat, dict) else "",
-                    "descricao": cat.get("descricao", "")[:100] if isinstance(cat, dict) else "",
+                    "nome": obj.get("nome", "") if isinstance(obj, dict) else "",
+                    "descricao": obj.get("descricao", "")[:100] if isinstance(obj, dict) else "",
                 }
-                for cat in categories_updated
+                for obj in objects_updated
             ],
             "reasoning": reasoning,
             "model": self.model,
-            "num_total_categories": len(self.category_registry.get_all()),
+            "num_total_objects": len(self.object_registry.get_all()),
         }
         
         try:
-            with open(self.reasoning_categories_path, "a", encoding="utf-8") as f:
+            with open(self.reasoning_objects_registry_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-            LOGGER.debug("📝 Reasoning logged for category update: %d categories affected", len(categories_updated))
+            LOGGER.debug("📝 Reasoning logged for object registry update: %d objects affected", len(objects_updated))
         except Exception as exc:
-            LOGGER.warning("Failed to log reasoning for categories: %s", exc)
+            LOGGER.warning("Failed to log reasoning for objects registry: %s", exc)
 
-    def _categories_as_json(self) -> str:
-        categories_list = self._categories_as_list()
-        if not categories_list:
+    def _objects_as_json(self) -> str:
+        objects_list = self._objects_as_list()
+        if not objects_list:
             return "[]"
-        return json.dumps(categories_list, ensure_ascii=False, indent=2)
+        return json.dumps(objects_list, ensure_ascii=False, indent=2)
 
-    def _categories_as_list(
+    def _objects_as_list(
         self,
         *,
         sample_limit: int = 3,
         required_examples: Optional[Dict[str, str]] = None,
     ) -> List[CategoryInfo]:
-        """Build category list for LLM prompt, reconstructing 'nome' from keys."""
+        """Build object list for LLM prompt, reconstructing 'nome' from keys."""
         snapshot: List[CategoryInfo] = []
         required_examples = required_examples or {}
-        categories = self.category_registry.get_all()
-        for name in sorted(categories):
-            category = categories[name]
-            examples = category.get("exemplos", []) if isinstance(category.get("exemplos"), list) else []
+        objects = self.object_registry.get_all()
+        for name in sorted(objects):
+            obj = objects[name]
+            examples = obj.get("exemplos", []) if isinstance(obj.get("exemplos"), list) else []
             required = required_examples.get(name)
             sampled = self._sample_examples(examples, required_example=required, limit=sample_limit)
             # Reconstruct 'nome' from key for LLM prompt
             snapshot.append(
                 {
                     "nome": name,
-                    "descricao": category.get("descricao", ""),
+                    "descricao": obj.get("descricao", ""),
                     "exemplos": sampled,
                 }
             )
@@ -522,15 +563,15 @@ class LLMClassifier:
                 f"Resposta do modelo não é JSON válido: {exc.msg} na posição {exc.pos}"
             ) from exc
 
-        categoria = parsed.get("categoria_escolhida")
-        categorias_atualizadas = parsed.get("categorias_atualizadas", [])
+        objeto = parsed.get("objeto_escolhido")
+        objetos_atualizados = parsed.get("objetos_atualizados", [])
 
-        if not isinstance(categoria, str) or not categoria.strip():
-            raise ResponseParsingError("Campo 'categoria_escolhida' ausente ou inválido.")
-        if not isinstance(categorias_atualizadas, list):
-            raise ResponseParsingError("Campo 'categorias_atualizadas' deve ser uma lista.")
+        if not isinstance(objeto, str) or not objeto.strip():
+            raise ResponseParsingError("Campo 'objeto_escolhido' ausente ou inválido.")
+        if not isinstance(objetos_atualizados, list):
+            raise ResponseParsingError("Campo 'objetos_atualizados' deve ser uma lista.")
 
-        parsed["categoria_escolhida"] = categoria.strip()
+        parsed["objeto_escolhido"] = objeto.strip().lower()  # Normalize to lowercase
         return parsed
 
 
@@ -574,10 +615,10 @@ def process_workbooks(
     input_dir: Path,
     output_parquet: Path,
     output_csv: Path,
-    classification_cache_path: Path,
-    categories_path: Path,
-    reasoning_classifications_path: Path,
-    reasoning_categories_path: Path,
+    object_cache_path: Path,
+    objects_path: Path,
+    reasoning_objects_path: Path,
+    reasoning_objects_registry_path: Path,
     system_prompt: str,
     user_prompt_template: str,
     model: str = "gpt-5-mini",
@@ -621,13 +662,13 @@ def process_workbooks(
     LOGGER.info("📊 Total de arquivos: %d | Total de linhas: %d", len(file_metadata), total_rows_all_files)
     LOGGER.info("")
 
-    classifier = LLMClassifier(
-        ClassificationCache(classification_cache_path),
-        CategoryRegistry(categories_path),
+    extractor = LLMObjectExtractor(
+        ObjectCache(object_cache_path),
+        ObjectRegistry(objects_path),
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
-        reasoning_classifications_path=reasoning_classifications_path,
-        reasoning_categories_path=reasoning_categories_path,
+        reasoning_objects_path=reasoning_objects_path,
+        reasoning_objects_registry_path=reasoning_objects_registry_path,
         model=model,
         max_retries=max_retries,
         backoff_seconds=backoff_seconds,
@@ -667,7 +708,7 @@ def process_workbooks(
             for idx, solicitacao in enumerate(frame[TARGET_COLUMN_NAME].tolist(), start=1):
                 normalized = _normalize_solicitacao(solicitacao)
                 if not normalized:
-                    categoria = ""
+                    objeto = ""
                     skipped_empty += 1
                     global_row_counter += 1
                     global_percentage = (global_row_counter / total_rows_all_files) * 100
@@ -676,11 +717,11 @@ def process_workbooks(
                     total_requests += 1
                     global_row_counter += 1
                     global_percentage = (global_row_counter / total_rows_all_files) * 100
-                    categoria, was_cached, llm_time = classifier.classify(normalized)
+                    objeto, was_cached, llm_time = extractor.extract_object(normalized)
                     
                     # Calculate ETA based on remaining rows and average LLM time
                     remaining_rows = total_rows_all_files - global_row_counter
-                    avg_llm_time = classifier.get_average_llm_time()
+                    avg_llm_time = extractor.get_average_llm_time()
                     eta_str = ""
                     if avg_llm_time and remaining_rows > 0:
                         # Estimate time for remaining rows (assuming some will be cached)
@@ -697,12 +738,12 @@ def process_workbooks(
                     
                     cache_status = "✓ cache" if was_cached else "🤖 LLM"
                     time_info = f" ({llm_time:.2f}s)" if llm_time else ""
-                    LOGGER.info("  [%d/%d | %.1f%%] %s '%s' %s%s%s", global_row_counter, total_rows_all_files, global_percentage, year_info, categoria, cache_status, time_info, eta_str)
+                    LOGGER.info("  [%d/%d | %.1f%%] %s '%s' %s%s%s", global_row_counter, total_rows_all_files, global_percentage, year_info, objeto, cache_status, time_info, eta_str)
                 
                 # Create single-row dataframe and add to buffer
                 row_data = frame.iloc[[idx-1]].copy()
-                # Add category column with proper assignment
-                row_data.loc[row_data.index[0], CATEGORY_COLUMN_NAME] = categoria
+                # Add object column with proper assignment
+                row_data.loc[row_data.index[0], OBJECT_COLUMN_NAME] = objeto
                 row_data.insert(0, "Planilha", sheet_name)
                 row_data.insert(0, "Arquivo", workbook.name)
                 batch_buffer.append(row_data)
@@ -753,13 +794,13 @@ def process_workbooks(
     LOGGER.info("✓ Parquet gerado: %s", output_parquet)
     
     LOGGER.info(
-        "Processamento concluído. CSV: %s | Parquet: %s | Total solicitacoes: %s | Vazias ignoradas: %s | Cache hits: %s | Cache misses: %s",
+        "Processamento concluído. CSV: %s | Parquet: %s | Total solicitaçoes: %s | Vazias ignoradas: %s | Cache hits: %s | Cache misses: %s",
         output_csv,
         output_parquet,
         total_requests,
         skipped_empty,
-        classifier.cache_hits,
-        classifier.cache_misses,
+        extractor.cache_hits,
+        extractor.cache_misses,
     )
 
 
@@ -784,28 +825,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Caminho do arquivo CSV intermediário (escrita incremental)",
     )
     parser.add_argument(
-        "--classification-cache",
+        "--object-cache",
         type=Path,
-        default=DEFAULT_CLASSIFICATION_CACHE_PATH,
-        help="Arquivo de cache JSON para classificações (mapeamento texto->categoria)",
+        default=DEFAULT_OBJECT_CACHE_PATH,
+        help="Arquivo de cache JSON para extrações (mapeamento texto->objeto)",
     )
     parser.add_argument(
-        "--categories",
+        "--objects",
         type=Path,
-        default=DEFAULT_CATEGORIES_PATH,
-        help="Arquivo JSON para registro de categorias (definições e exemplos)",
+        default=DEFAULT_OBJECTS_PATH,
+        help="Arquivo JSON para registro de objetos (definições e exemplos)",
     )
     parser.add_argument(
-        "--reasoning-classifications",
+        "--reasoning-objects",
         type=Path,
-        default=DEFAULT_REASONING_CLASSIFICATIONS_PATH,
-        help="Arquivo JSONL para log de raciocínio das classificações",
+        default=DEFAULT_REASONING_OBJECTS_PATH,
+        help="Arquivo JSONL para log de raciocínio das extrações",
     )
     parser.add_argument(
-        "--reasoning-categories",
+        "--reasoning-objects-registry",
         type=Path,
-        default=DEFAULT_REASONING_CATEGORIES_PATH,
-        help="Arquivo JSONL para log de raciocínio das atualizações de categorias",
+        default=DEFAULT_REASONING_OBJECTS_REGISTRY_PATH,
+        help="Arquivo JSONL para log de raciocínio das atualizações de objetos",
     )
     parser.add_argument(
         "--system-prompt",
@@ -859,10 +900,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         input_dir=args.input_dir,
         output_parquet=args.output_parquet,
         output_csv=args.output_csv,
-        classification_cache_path=args.classification_cache,
-        categories_path=args.categories,
-        reasoning_classifications_path=args.reasoning_classifications,
-        reasoning_categories_path=args.reasoning_categories,
+        object_cache_path=args.object_cache,
+        objects_path=args.objects,
+        reasoning_objects_path=args.reasoning_objects,
+        reasoning_objects_registry_path=args.reasoning_objects_registry,
         system_prompt=system_prompt,
         user_prompt_template=user_prompt_template,
         max_retries=args.max_retries,

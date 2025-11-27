@@ -1,24 +1,36 @@
-Existing categories (Portuguese JSON array with nome, descricao, exemplos chosen from real cached requests; exemplos are context-only and must not appear in the response):
-{categorias_atual}
+Existing objects (Portuguese JSON array with nome, descricao, exemplos chosen from real cached requests; exemplos are context-only and must not appear in the response):
+{objetos_atuais}
 
-Classify the request below into exactly one Brazilian Portuguese category. If none fits, invent a short (maximum 4 words) Brazilian Portuguese category name with a VERY concise description (1-2 sentences, maximum 50 words).
+Extract the primary physical object being reconstructed from the request below. If the request mentions multiple objects, choose the PRIMARY one. If none fits perfectly, consider whether the request can reasonably be mapped to an existing object before creating a new one.
 
-CRITICAL RULES:
-- Use Brazilian Portuguese for all category names and descriptions
+CRITICAL RULES FOR OBJECT SELECTION:
+- Use Brazilian Portuguese for all object names and descriptions
+- Object names MUST be lowercase (e.g., "pontes", not "Pontes" or "PONTES")
+- STRONGLY PREFER existing objects - only create new ones for clearly distinct infrastructure types
+- Be CONSERVATIVE: avoid creating redundant objects
+  * "pontilhões" → use "pontes" (pontilhões are small bridges)
+  * "asfalto" or "concreto" → use "pavimentação" (asphalt/concrete are pavement types)
+  * "viadutos" → use "pontes" (viaducts are types of bridges)
+  * "casas" or "moradias" → use "unidades habitacionais"
+  * "escolas" or "postos de saúde" → use "edificações/prédios públicos"
+
 - Do NOT include "exemplos" field in your response
 - Keep descriptions VERY SHORT (maximum 2 sentences, 50 words)
 - Never repeat information or use verbose language
 - Be concise and direct
+- Focus on CONCRETE physical objects, avoid abstract concepts
 
 Request text: "{solicitacao}"
 
 Return ONLY this JSON structure (no extra text):
 {{
-  "categoria_escolhida": "<nome da categoria em português>",
-  "categorias_atualizadas": [
+  "objeto_escolhido": "<nome do objeto em português, lowercase>",
+  "raciocinio_objeto": "<justificativa de 1-2 frases explicando por que este objeto foi escolhido>",
+  "objetos_atualizados": [
     {{
-      "nome": "<categoria>",
-      "descricao": "<descrição muito curta da categoria - máximo 2 frases>"
+      "nome": "<objeto em lowercase>",
+      "descricao": "<descrição muito curta do objeto - máximo 2 frases>"
     }}
-  ]
+  ],
+  "raciocinio_objetos": "<justificativa de 1-2 frases sobre mudanças nos objetos, ou 'Nenhuma alteração necessária'>"
 }}
