@@ -706,65 +706,84 @@ def process_workbooks(
 
             # Process rows incrementally and flush in batches
             for idx, solicitacao in enumerate(frame[TARGET_COLUMN_NAME].tolist(), start=1):
-                normalized = _normalize_solicitacao(solicitacao)
-                if not normalized:
-                    objeto = ""
-                    skipped_empty += 1
-                    global_row_counter += 1
-                    global_percentage = (global_row_counter / total_rows_all_files) * 100
-                    LOGGER.info("  [%d/%d | %.1f%%] %s (vazia - ignorada)", global_row_counter, total_rows_all_files, global_percentage, year_info)
-                else:
-                    total_requests += 1
-                    global_row_counter += 1
-                    global_percentage = (global_row_counter / total_rows_all_files) * 100
-                    objeto, was_cached, llm_time = extractor.extract_object(normalized)
-                    
-                    # Calculate ETA based on remaining rows and average LLM time
-                    remaining_rows = total_rows_all_files - global_row_counter
-                    avg_llm_time = extractor.get_average_llm_time()
-                    eta_str = ""
-                    if avg_llm_time and remaining_rows > 0:
-                        # Estimate time for remaining rows (assuming some will be cached)
-                        # Use conservative estimate: assume 50% cache hit rate for remaining
-                        estimated_seconds = remaining_rows * avg_llm_time * 0.5
-                        hours = estimated_seconds / 3600
-                        if hours >= 1:
-                            eta_str = f" | ETA: {hours:.1f}h"
-                        elif estimated_seconds >= 60:
-                            minutes = estimated_seconds / 60
-                            eta_str = f" | ETA: {minutes:.1f}m"
-                        else:
-                            eta_str = f" | ETA: {estimated_seconds:.0f}s"
-                    
-                    cache_status = "✓ cache" if was_cached else "🤖 LLM"
-                    time_info = f" ({llm_time:.2f}s)" if llm_time else ""
-                    LOGGER.info("  [%d/%d | %.1f%%] %s '%s' %s%s%s", global_row_counter, total_rows_all_files, global_percentage, year_info, objeto, cache_status, time_info, eta_str)
-                
-                # Create single-row dataframe and add to buffer
-                row_data = frame.iloc[[idx-1]].copy()
-                # Add object column with proper assignment
-                row_data.loc[row_data.index[0], OBJECT_COLUMN_NAME] = objeto
-                row_data.insert(0, "Planilha", sheet_name)
-                row_data.insert(0, "Arquivo", workbook.name)
-                batch_buffer.append(row_data)
-                rows_in_buffer += 1
-                
-                # Flush batch to CSV if threshold reached
-                if rows_in_buffer >= csv_flush_batch_size:
-                    batch_df = pd.concat(batch_buffer, ignore_index=True)
-                    if not csv_initialized:
-                        batch_df.to_csv(output_csv, index=False, mode='w', encoding='utf-8', quoting=1, lineterminator='\n')
-                        csv_initialized = True
-                        total_rows_written_to_csv += len(batch_df)
-                        LOGGER.info("💾 CSV inicializado: %s", output_csv)
-                        LOGGER.info("💾 Flush: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
+                try:
+                    normalized = _normalize_solicitacao(solicitacao)
+                    if not normalized:
+                        objeto = ""
+                        skipped_empty += 1
+                        global_row_counter += 1
+                        global_percentage = (global_row_counter / total_rows_all_files) * 100
+                        LOGGER.info("  [%d/%d | %.1f%%] %s (vazia - ignorada)", global_row_counter, total_rows_all_files, global_percentage, year_info)
                     else:
-                        batch_df.to_csv(output_csv, index=False, mode='a', header=False, encoding='utf-8', quoting=1, lineterminator='\n')
-                        total_rows_written_to_csv += len(batch_df)
-                        LOGGER.info("💾 Flush: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
+                        total_requests += 1
+                        global_row_counter += 1
+                        global_percentage = (global_row_counter / total_rows_all_files) * 100
+                        objeto, was_cached, llm_time = extractor.extract_object(normalized)
+                        
+                        # Calculate ETA based on remaining rows and average LLM time
+                        remaining_rows = total_rows_all_files - global_row_counter
+                        avg_llm_time = extractor.get_average_llm_time()
+                        eta_str = ""
+                        if avg_llm_time and remaining_rows > 0:
+                            # Estimate time for remaining rows (assuming some will be cached)
+                            # Use conservative estimate: assume 50% cache hit rate for remaining
+                            estimated_seconds = remaining_rows * avg_llm_time * 0.5
+                            hours = estimated_seconds / 3600
+                            if hours >= 1:
+                                eta_str = f" | ETA: {hours:.1f}h"
+                            elif estimated_seconds >= 60:
+                                minutes = estimated_seconds / 60
+                                eta_str = f" | ETA: {minutes:.1f}m"
+                            else:
+                                eta_str = f" | ETA: {estimated_seconds:.0f}s"
+                        
+                        cache_status = "✓ cache" if was_cached else "🤖 LLM"
+                        time_info = f" ({llm_time:.2f}s)" if llm_time else ""
+                        LOGGER.info("  [%d/%d | %.1f%%] %s '%s' %s%s%s", global_row_counter, total_rows_all_files, global_percentage, year_info, objeto, cache_status, time_info, eta_str)
                     
-                    batch_buffer = []
-                    rows_in_buffer = 0
+                    # Create single-row dataframe and add to buffer
+                    row_data = frame.iloc[[idx-1]].copy()
+                    # Add object column with proper assignment
+                    row_data.loc[row_data.index[0], OBJECT_COLUMN_NAME] = objeto
+                    row_data.insert(0, "Planilha", sheet_name)
+                    row_data.insert(0, "Arquivo", workbook.name)
+                    batch_buffer.append(row_data)
+                    rows_in_buffer += 1
+                    
+                    # Flush batch to CSV if threshold reached
+                    if rows_in_buffer >= csv_flush_batch_size:
+                        batch_df = pd.concat(batch_buffer, ignore_index=True)
+                        if not csv_initialized:
+                            batch_df.to_csv(output_csv, index=False, mode='w', encoding='utf-8', quoting=1, lineterminator='\n')
+                            csv_initialized = True
+                            total_rows_written_to_csv += len(batch_df)
+                            LOGGER.info("💾 CSV inicializado: %s", output_csv)
+                            LOGGER.info("💾 Flush: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
+                        else:
+                            batch_df.to_csv(output_csv, index=False, mode='a', header=False, encoding='utf-8', quoting=1, lineterminator='\n')
+                            total_rows_written_to_csv += len(batch_df)
+                            LOGGER.info("💾 Flush: %d linhas escritas | Total no arquivo: %d", len(batch_df), total_rows_written_to_csv)
+                        
+                        batch_buffer = []
+                        rows_in_buffer = 0
+                
+                except Exception as exc:
+                    global_row_counter += 1
+                    global_percentage = (global_row_counter / total_rows_all_files) * 100
+                    LOGGER.error("  [%d/%d | %.1f%%] %s ⚠️  ERRO ao processar linha %d: %s", 
+                                 global_row_counter, total_rows_all_files, global_percentage, year_info, idx, exc)
+                    LOGGER.debug("Stack trace:", exc_info=True)
+                    # Add row with empty object on error
+                    try:
+                        row_data = frame.iloc[[idx-1]].copy()
+                        row_data.loc[row_data.index[0], OBJECT_COLUMN_NAME] = ""
+                        row_data.insert(0, "Planilha", sheet_name)
+                        row_data.insert(0, "Arquivo", workbook.name)
+                        batch_buffer.append(row_data)
+                        rows_in_buffer += 1
+                    except Exception as inner_exc:
+                        LOGGER.error("  Falha crítica ao adicionar linha com erro ao buffer: %s", inner_exc)
+                    continue
             
             LOGGER.info("-" * 70)
             LOGGER.info("✅ Planilha '%s'%s: concluída (%d linhas processadas)\n", sheet_name, year_info, total_lines)

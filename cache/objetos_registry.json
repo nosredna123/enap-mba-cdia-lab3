@@ -1,36 +1,173 @@
 {
   "pontes": {
-    "descricao": "Estruturas de transposição sobre rios, vales ou vias, incluindo viadutos e pontilhões.",
+    "descricao": "Estruturas de travessia sobre cursos d'água, vales ou estradas.",
     "exemplos": [
-      "CHUVA DE GRANDE INTENSIDADE NO DIA DE 12/04/2017, INICIOU-SE POR VOLTA DAS 14:30HRS E COM TERMINO AS 16:20HRS, O\r\nRIBEIRÃO SÃO DOMINGOS FICOU NO SEU LIMITE DE CAPACIDADE, E QUE DEVIDO A ISSO HOUVE PONTOS DE ALAGAMENTO, POREM NO ITEM 1º HOUVE A QUEDA DE UMA PONTE DE SUMA IMPORTÂNCIA QUE RECEBE GRANDE FLUXO DE VEÍCULOS\r\nUMA VEZ QUE ALI É CONSIDERADO O CORAÇÃO DO MUNICÍPIO E PONTO DE REFERENCIA PARA A CHEGADA DE VÁRIOS BAIRROS E QUE\r\nDÁ ACESSO A TODA A PARTE DE ESTRUTURA E LOGÍSTICA DO MUNICÍPIO DE CATANDUVA (BANCOS, PREFEITURA, COMÉRCIOS,\r\nHOSPITAIS, TERMINAIS DE ÔNIBUS, CÂMARA MUNICIPAL, SUPERMERCADOS). ESSES FATOS VEM SE REPETINDO CONFORME ENCHENTES\r\nEM 2008 E 2016.\r\n- ESSAS CHUVAS OCASIONARAM ENCHENTES EM VARIAS CASAS, DEVIDO A UM ESTRANGULAMENTO DA PASSAGEM DE ÁGUAS DO CÓRREGO BOA VISTA SOB OS TRILHOS DA FEPASA. PARA TANTO, NECESSITAMOS A AMPLIAÇÃO DESSA PASSAGEM, ATRAVES DE UMA GALERIA, CONSTRUIDA DE FORMA NÃO DESTRUTIVA, SOB ESSES TRILHOS.",
-      "O município de Itaituba-Pará passou por um período de inverno muito forte neste ano com chuvas intensas que ocorrem com acumulados significativos, causando múltiplos desastres como, por exemplo, enxurradas, inundações e movimento de massas, deslizamentos etc... Devido às chuvas intensas o nível do rio tapajós cresceu acima 8.90 m atingindo varias localidades as suas margens e deixando pontes submersas e danificadas causando estragos nas suas edificações, vias de acesso ficaram intrafegáveis isolando comunidades e prejudicando seus acessos, além das erosões que aparecem pelo acumulo de águas em vias com extrapolação da capacidade de escoamento.",
-      "AÇÕES DE RECUPERAÇÃO - Desastre por ENXURRADAS -  Decreto Municipal nº. 4768, de 04 de janeiro de 2017.\r\nOBJETO: Obras de reconstrução de pontilhões no interior do município de São Jerônimo"
+      "Três pontes comprometidas por total, sendo necessário, remoção dos destroços e construção, apresento as seguintes dimensões básicas; Reconstrução Ponte Cascata do Fernandes - Dimensões 10x7,5m, Reconstrução Ponte Adalberto da Silva, Águas Frias - Arataca - Dimensões 10x5m e Reconstrução Ponte Aldoino Visentainer - Arataca - Dimensões 15x7,5m.",
+      "OBRA DE RECONSTRUÇÃO COM EXECUÇÃO DA COMPOSIÇÃO DE PONTE COLAPSADA E SUAS CAMADAS DO PAVIMENTO, RESTABELECENDO O SISTEMA DE DRENAGEM DA CALHA DO CÓRREGO E A SEGURANÇA DA TRAFEGABILIDADE DE COMUNIDADE NO ENTORNO DA ÁREA ROMPIDA POR CONTAS DAS FORTES CHUVAS EM ÁREA LOCALIZADA NO MUNICÍPIO DE PENEDO ALAGOAS. .",
+      "Em circunstancias  das fortes chuvas, características do inverno amazônico que impacta toda região, se deu o decreto de emergência\r\ndepois de diversas comunidades rurais ficarem isoladas com as estradas cortadas, onde as enxurradas destruiu pontes e\r\nbueiros, em outros pontos a formação de atoleiros causando diversos transtorno e prejuízos no município."
     ]
   },
   "bueiros e galerias": {
-    "descricao": "Sistemas de drenagem pluvial subterrânea, como bueiros, galerias e tubulações de escoamento.",
-    "exemplos": []
+    "descricao": "Condutos sob vias para escoamento de águas pluviais.",
+    "exemplos": [
+      "Necessário, executar obras de contenções, recuperações de leito hídrico com contenção de margem, reparos estruturais em pontes, desobstruções de estradas vicinais, retaludamento de encostas, desassoreamento do rio Piranga e reconstrução de bueiros.",
+      "RECUPERAÇÃO BUEIRO - CONTENÇÕES - DESASSOREAMENTO CÓRREGO TIMOTINHO \r\nREMANEJAMENTO EMERGENCIAL DE REDE DE DRENAGEM. Os danos ocasionados pela enchente que aconteceu nos dias \r\n09/01/2022 e 10/01/2022, no Bairro Olaria, município de Timóteo-MG, comprometendo dois antigos dispositivos de drenagem (Bueiros Duplos de Concreto Celular) causando recalques e desnivelando as juntas internas, provocando fuga de material do aterro e também a instabilidade dos \r\ntaludes laterais o que levou ao colapso de uma escada dissipadora de drenagem.\r\n Salientamos que o \r\nmunicípio já iniciou intervenção para investigação e busca de soluções para o problema e \r\ninterrompeu transito no local afetado para a realização das intervenções emergenciais. \r\n\r\n\r\n DATA:",
+      "As fortes chuvas que assolaram o Município nos mês de Janeiro do corrente ano provocaram deslizamento parcial  da Rua Josepha Tavares Torres, Bairro\r\nSão Jose Operário. Esse deslizamento danificou dois imóveis parcialmente,  destruiu a contenção, o aterro e também parte da rede de drenagem pluvial existente à jusante. Já na da Avenida Osvaldo de Abreu Rios que recebe grande fluxo de veiculo da  rodovia MG329, a um grande afundamento da via devido ao rompimento do bueiro.   Os danos estão evidenciados em relatórios elaborados pela Defesa Civil Municipal  para restabelecer a trafegabilidade da via, a Defesa Civil Municipal em vistoria ao local, acompanhada engenheiro municipal orienta pela reconstituição e medidas de prevenção e recuperação do sistema de drenagem pluvial e  construção de Muro de Contenção de Arrimo e concreto armado ."
+    ]
   },
   "pavimentação": {
-    "descricao": "Revestimento de vias urbanas e rurais, incluindo asfalto, concreto e paralelepípedos.",
+    "descricao": "Revestimento ou recuperação de vias com asfalto, concreto ou bloquetes.",
     "exemplos": [
-      "Recuperação de áreas degradas e de instabilidade geotécnica, incluindo terraplanagem, estabilização de solo via gabião, execução de drenagem superficial e profunda e pavimentação de vias entorno da Rua Joaquim Marques da Silva, Bairro Centro - Cidade de São Tiago/MG.",
-      "RECONSTRUÇÃO DE FORMA DEFINITIVA DE OBRAS DE INFRAESTRUTURA NA ZONA RURAL DE SANTA MARIA DAS BARREIRAS"
+      "Recuperação e reconstrução dos principais corredores de estradas vicinais deste Município (Estrada das Torres/Árvore Grande/Chacreamento Chico da Germana, Estrada do Baú, Estrada do Brejinho, Estrada da Mandassia, Estrada Luz/Lagoa da Prata, Estrada do Bom Jardim, Estrada da Marcela, Estrada das Três Barras, Estrado do Campo do Meio). Com as frequentes e intensas chuvas ocorridas a trafegabilidade pelas vias rurais está totalmente comprometida. Vários trechos estão interditados e tantos outros em condições precárias, comprometendo assim, de maneira geral, o tráfego em toda extensão das vias. A ação proposta neste Plano de Trabalho visa a recuperação/reconstrução das vias principais, através do uso de maquinário e mão de obra da Prefeitura e aquisição de material nobre adequado (brita, rejeito de brita, etc), com recursos da União, material este que será aplicado nos pontos críticos de cada via a fim de garantir o restabelecimento das condições de trânsito e a busca pela normalidade para o escoamento da produção rural, recebimento de insumos, transporte escolar, etc.",
+      "Todo o município de Branquinha, seja área urbana ou rural, foram afetadas pelas fortes chuvas que ocorreram a partir do dia 01/07/2022,\r\ncausando transtorno em toda população e ainda por alguma dificuldades de acessos a zona rural e em algumas partes da cidade não\r\nconseguimos realizar visitas in loco o que corresponde aos bairros, povoados e distritos do município: Centro - ruas: Floriano Peixoto,\r\nBenedito Lopes, Prado Imensa, Joao Augusto Morais, Antônio Martins e Julho Maia. É notório que estas chuvas nos trouxeram não apenas\r\nproblemas estruturais e também de saúde pública, bem como emprego renda por sua severidade e preocupação com a grande quantidade\r\nde pessoas desalojadas em virtude da precariedade das unidades habitacionais, e pela localização da parte baixa do município, além do\r\ndanos causados ao comércios e serviços. Diversas vias, estradas e pontes de acessos a povoados foram destruídas. As ações de atendimento emergencial a população atingida foram e estão sendo realizadas, porém, nesta etapa, carece de recursos financeiros para reconstrução de estradas, pontes e unidades habitacionais que foram parcial ou totalmente destruídas.",
+      "RECONSTRUÇÃO DA RUA DO CRUZEIRO EM 34,14 METROS COM MURO DE ARRIMO."
     ]
   },
   "unidades habitacionais": {
-    "descricao": "Moradias residenciais unifamiliares ou multifamiliares afetadas pelo desastre.",
+    "descricao": "Construção ou recuperação de moradias para famílias afetadas.",
     "exemplos": [
-      "a. Realocação de famílias ribeirinhas moradias afetadas pelo desastre, reconhecido pela Portaria n°55/2017 do Secretário Nacional de Proteção e Defesa Civil.",
-      "Plano de trabalho referente a Enxurrada ocorrida no dia 05/01/2017 no município de Brusque Santa Catarina, visando a obtenção de recursos Federais para reconstrução de 08 Unidades habitacionais, a serem reconstruídas em locais diferentes dos afetados pelo desastre mencionado, em local a ser definido pelo município.\r\nMeta 01 - Reconstrução de residência afetada por deslizamento, Localizada na Rua Nicolau Lauritizem, Bairro Guarani;\r\nMeta 02 - Reconstrução de residência atingida por deslizamento, localizada a Rua Luiz Rafael Flor, nº 180, Bairro Nova Brasilia;\r\nMeta 03 - Reconstrução de residência afetada estruturalmente por alagamento, Localizada a Rua Joaquim Zucco, nº 656, Bairro Nova Brasilia;\r\nMeta 04 - Reconstrução de residencia atingida por deslizamento, Localizada a Rua Florêncio Day, Bairro Azambuja;\r\nMeta 05 - Reconstrução de residência Multifamiliar, composta por 04 Unidades habitacionais, Afetada por erosões em virtude das enxurradas, Localizada a Rua José Winter, nº273."
+      "Obras de reconstrução unidades habitacionais destruídas ou parcialmente afetadas pelo desastre Cód. 13214 - Tempestade Local/Convectiva - Chuvas intensas, reconhecido pela Portaria n.º 502 de 22/02/2022 do Senhor Secretário Nacional de Proteção e Defesa Civil.",
+      "Este processo objetiva a reconstrução 10 unidades habitacionais, cujos dados dos beneficiários e justificativas se encontram dispostas nos anexos deste processo. \r\n\r\nCada unidade habitacional planejada possui 43m², e sua planta básica modelo padrão segue em anexo. As edificações serão reconstruídas em zona urbana do Município de Igarassu/PE.",
+      "CONSTRUÇÃO DE 03 UNIDADES HABITACIONAIS"
     ]
   },
   "edificações/prédios públicos": {
-    "descricao": "Construções públicas como escolas, postos de saúde e centros comunitários.",
+    "descricao": "Edifícios públicos como escolas, unidades de saúde e sedes administrativas.",
     "exemplos": [
-      "Obras de reconstrução de infraestrutura pública destruída pelo desastre reconhecido pela Portaria nº 75/2017 de 12 de junho de 2017, do\r\nSenhor Secretário Nacional de Proteção e Defesa Civil, do evento ocorrido no dia 30 de maio de 2017, no Município de Sinimbu/RS",
-      "Obras de reconstrução de infraestrutura Publica destruídas pelo desastre reconhecido pela portaria 60 de 11 de Maio de 2017.",
-      "OBRAS DE RECONSTRUÇÃO DE INFRAESTRUTURA PÚBLICA DESTRUÍDAS PELO DESASTRE reconhecido pela Portaria nº 19 de 15 de fevereiro de 2017 do Senhor Secretário Nacional de Proteção e Defesa Civil."
+      "RECONSIDERAÇÃO DE ATO, do pedido de solicitação de recursos federais para reconstrução sobre o Processo de nº:59051.014807/2022-91, registrado como o Protocolo: REC-MT-5103858-20220408-01, conforme Art. 8º da Portaria/MDR 3.033 de 04 de dezembro de 2020.",
+      "Obras de reconstrução pública do Município de Petrópolis/RJ, destruída pelo desastre ocorrido ocorrido em 15 de fevereiro e 20 de março do \r\ncorrente ano, reconhecido pela Portaria nº 395, de 16 de fevereiro de 2022, da Secretaria Nacional de Defesa Civil.",
+      "Obras de reconstrução pública do Município de Petrópolis/RJ, destruída pelo desastre ocorrido ocorrido em 15 de fevereiro e 20 de março do corrente ano, \r\nreconhecido pela Portaria nº 395, de 16 de fevereiro de 2022, da Secretaria Nacional de Defesa Civil."
+    ]
+  },
+  "canais de drenagem": {
+    "descricao": "Canais a céu aberto para condução de águas pluviais.",
+    "exemplos": [
+      "As fortes chuvas ocorridas no período de 01 a 03 de julho de 2022, os canais de drenagem urbana não conseguiu escoar águas pluviais inerentes as chuvas intensas ocorridas. No início dos anos 2000 Itaíba sofreu também com uma forte chuva, onde causou enchente em boa parte da cidade, muito se dá por conta da ausência dos dispositivos de drenagem, boca de lobo em pontos estratégicos e etc. Como se não bastasse ainda sofremos com a não manutenção e reparos dos canais de drenagem, diferente da enchente dos anos 2000, o município cresceu bastante, onde antes as aguas tinham uma certa facilidades para seu escoamento, hoje encontrasse com dificuldades, em alguns pontos chegam a alagar como bem vimos nessa enchente de 2022, casas as margens dos canais, casas foram feitas por cima e rente ao nível dos canais de drenagem, ausência de outros dispositivos de drenagem e demais dificuldades fizeram nós pensarmos em alternativas para maximizar a drenagem e vazão das aguas desse canais, bem como mitigar os riscos a população de novas enchentes. No atual orçamento previmos manutenção de vala (taludes) desses canais, bem como aumentar o seu alargamento (em determinados trechos) e sua profundidade em 1,5 metros, como podemos ver no relatório fotográfico existem locais de inundação ontem nem mesmo existem taludes de canal de drenagem devidamente executados, ainda em vala de solo natural, o orçamento também contempla a execução em concreto armado deste trecho do canal.",
+      "Chuvas com intensidade elevadas no dia 09 de janeiro de 2022, atingidas pela tempestade sub-tropical do Pacífico Sul, precipitação acima da média para o mês de janeiro, chegando ao acumulado de 165,4 mm no período informado e 400 mm desde o inicio do mes de janeiro. O município no perímetro urbano, às margens do Rio Piracicaba, elevou sua altura a 9 metros acima do seu leito normal, represando o afluente Ribeirão Caladão, retendo suas águas, causando inundações em Bairro mais próximos a leito do Ribeirão. Nas regiões marcadas no item 4.2, foram identificados pontos de alagamentos, enxurradas e deslizamentos. Nas regiões mais próximas ao Rio Piracicaba, bairros foram inundados e famílias tiveram que ser retiradas de suas residências. Na zona rural, houveram deslizamentos de terras, prejudicando a\r\nacessibilidade dos moradores das localidades rurais mencionadas. Devido a zona de recarga das Represas Guilman Amorim (Antônio Dias- MG) e Represa Sá Carvalho (Antônio Dias-MG), estas com alto índice pluviométrico, necessitaram que aumentassem a defluência, causando forte vazão da montante do Rio Piracicaba.",
+      "Devido as fortes chuvas, um processo erosivo foi acelerado, deixando cerca de 20 casas em situação de risco, o objeto da proposta será a construção de uma escada de dissipação de energia para a água pluvial e restauração do entorno."
+    ]
+  },
+  "poços artesianos": {
+    "descricao": "Poços perfurados e sistemas de captação de água subterrânea.",
+    "exemplos": [
+      "SOLICITAÇÃO DE RECURSOS PARA ABERTURA DE POÇOS ARTESIANOS.",
+      "No dia 08 de novembro, poço artesiano localizado no bairro Santa Clara sofreu um colapso em sua estrutura, interrompendo o abastecimento de água a aproximadamente ¿ da população no município de Serrana. Houve necessidade de suprir o fornecimento de água aos moradores (o poço atendia 05 bairros no entorno) e desde a ocorrência do colapso,  necessitou-se buscar instrumentos que fossem direcionados a essa prerrogativa. Caminhões pipas foram acionados (prefeitura, usina, e outros contratados emergencialmente) para diminuir a falha no abastecimento de água potável e atender de forma pontual os moradores que estavam sofrendo do problema. Nas verificações técnicas possíveis, um poço desativado, em bairro próximo (de baixa vazão) foi reativado e um outro poço, mais distante, que atendia outros bairros, com vazão que poderia ser redirecionada, foi utilizado, necessitando nessa operação, colocação de tubulação, onde fez-se uma vala (por aproximadamente 1050 m) atravessando um bairro, até que por meio de bomba de sucção, a caixa d¿água do poço que entrou em colapso fosse abastecida, durante alguns períodos do dia e assim também, houvesse a distribuição (limitada) de água aos moradores, por gravidade.",
+      "Os danos e prejuízos decorrentes do evento adverso implicaram no comprometimento da capacidade de resposta econômica e administrativa do poder público municipal.\r\n\tOs prejuízos considerados no setor agropecuário de acordo com laudo técnico da Emater foi de R$ 16.459.016,30 no período de estiagem, prejudicando a economia local.\r\n\tConstatou-se que cerca de 55 famílias (170 pessoas) estão em situação precária devido à falta de água.  \r\n\tOs gastos com manutenção de estradas devido ao efeito da estiagem tem aumentado significativamente, ficando em cerca de R$ 56.000,06 no período, com regularização de estradas vicinais com uso de 2 motoniveladoras, 2 caminhões caçamba e 1 rolo compactador, além da aquisição de britas para dar trafegabilidade as vias.\r\n\tOs gastos com manutenção dos poços artesianos (manutenção de bombas queimadas e quadro de comando), rede de agua e transporte de água (diesel caminhão pipa) devido ao efeito da estiagem tem aumentado significativamente, ficando em cerca de R$ 16.740.85 no período."
+    ]
+  },
+  "muros de contenção": {
+    "descricao": "Muros e estruturas de arrimo para estabilização de taludes e margens.",
+    "exemplos": [
+      "O objetivo desta solicitação visa atender o local afetado pelas fortes precipitações ocorridas no município e que causou transtornos deixando esse ponto em situação de vulnerabilidade de deslizamento, causando transtorno aos moradores e a administração publica municipal. Todo orçamento foi realizado utilizando os dados das tabelas Sinapi 03/2018 e Sicro 09/2017.",
+      "RECONSTRUÇÃO DE CONTENÇÕES QUE FORAM AFETADAS E DANIFICADAS DEVIDO AS FORTES CHUVAS NA CIDADE DE ÁGUAS FORMOSAS, NO PERÍODO DE 09 DE DEZEMBRO DE 2021.",
+      "Reconstrução da Estrada da Trindade - Ponto 04 com um muro de gravidade em gaiolas de gabião.\r\nComprimento 17,8m x Largura 020m x Altura 3,0m."
+    ]
+  },
+  "máquinas e equipamentos": {
+    "descricao": "Máquinas pesadas e equipamentos de apoio para obras públicas.",
+    "exemplos": [
+      "Aquisição de Retroescavadeira para recuperação de fontes protegidas.",
+      "AQUISIÇÃO DE UM CAMINHÃO TRUCK TRAÇADO 6 X 4, EQUIPADO COM TANQUE EM INOX ESPECIAL PARA TRANSPORTE DE ÁGUA POTÁVEL COM CAPACIDADE MINIMA DE 9000 LITROS PARA ATENDER AS PROPRIEDADES RURAIS, SISTEMAS COMUNITÁRIOS DE ABASTECIMENTO DE ÁGUA  E ATIVIDADES ESSENCIAIS COMO HOSPITAL, ESCOLAS E CRECHES DA ÁREA RURAL E URBANA DO MUNICÍPIO.",
+      "O Município de Armazém foi atingido por grave estiagem que trouxe inúmeros problemas de abastecimento de água tanto para as famílias da área urbana e rural, como também afetou a agricultura, com necessidade de distribuição de água com caminhão pipa e também ações com máquinas para reduzir e minimizar tais impactos, visto que a agropecuária é umas das principais fontes de renda do município.\r\nAssim dessa forma buscamos recursos para aquisição de máquinas para melhorar as condições do meio rural e reduzir os agravantes das próximas estiagens."
+    ]
+  },
+  "barragens e açudes": {
+    "descricao": "Estruturas para armazenamento e controle de água em reservatórios.",
+    "exemplos": [
+      "No dia 26/12/2021 houve ruptura de uma barragem que abastece o distrito de Cristalândia, causando estragos e danos estruturais a jusante da barragem. A comunidade local foi afetada diretamente com a perda da bomba, que causou o desabastecimento das residencias, escola e Unidade Básica de Saúde. Além da perda de parte das lavouras que margeiam o Rio da Contas.",
+      "Ações de reconstrução para restabelecimento e normalidade, em virtude dos desastres causados pelas fortes chuvas e rompimento de barragens no Município de Pedro Alexandre-BA",
+      "Realizar ação estruturante para prevenção de seca/estiagem com implantação de abertura aguadas do tipo barragem, nas regiões: Craúno, Piedade, Boa sorte, Lagoa Nova, Lagoa Nova II, Roçado Grande, Roçado Grande II, Roçado Grande III, Colher de Pau e Umbuzeiro, todos na Zona rural do Município de Poções, bem como Estação de Tratamento de Água ¿ ETA, no Rio das mulheres região do Fomento."
+    ]
+  },
+  "defesas costeiras": {
+    "descricao": "Obras de proteção da orla, como enrocamentos e quebra-mares.",
+    "exemplos": [
+      "Reconstrução dos danos causados pela erosão costeira/marinha que ocorreu no dia 02 de março de 2021 em Caiçara do Norte/RN (COBRADE: 1.1.4.1.0)",
+      "O TSUNAMI ATINGIU A CIDADE CAUSANDO DANOS MATERIAIS NA INFRAESTRUTURA DO MUNICIPIO.",
+      "O Projeto de Recuperação Ambiental da Praia de Mucuri consistirá na restauração das características geométricas e ambientais de sua faixa de praia, contemplando  dragagem/escavações de área de jazidas, a reposição de areia ao longo de 2.355,82 metros de praia (engorda de praia), dividida em dois trechos : SUL (Praias Malvinas, Pôr do Sol  e Baía do Sol) e NORTE (Praia do Jardim Atlântico  ou Vila Residencial Suzano). \r\n\r\nPara o abrigo do engordamento das praias e linha de costa serão construídos dois conjuntos de enrocamentos em berma geotécnica, distribuídos de tal forma que permitirão a criação de estirâncios de praia suficiente largos para propiciar balneabilidade e proteger o engordamento da praia e a linha de costa, constituídos de núcleo, sub-carapaça e carapaça (Figura 15.a): \r\nSul -         para a proteção de uma extensão de 1.139,96m de linha de costa, serão construídos o QUEBRA-MAR 1, o Quebra-Mar 2, o QUEBRA-MAR 3 e o ESPIGÃO 1.\r\nNorte -        para a proteção de uma extensão de 1.215,986m de linha de costa, serão construídos o QUEBRA-MAR 4, o Quebra-Mar 5, o QUEBRA-MAR 6 e o ESPIGÃO 2."
+    ]
+  },
+  "praças": {
+    "descricao": "Áreas públicas urbanas destinadas ao lazer e convívio comunitário.",
+    "exemplos": [
+      "Venho por meio deste solicitar recursos financeiros para reconstrução, da Praça Santana localizada no centro da cidade de Abre Campo-MG, Reconstrução da Ponte do córrego do Barroso zona rural do município de Abre Campo, e do Muro de contenção do Bairro do Vale do Sol sobre o Córrego da Lavra. As devidas dimensões das praças e do respectivo Muro estão em seus respectivos relatórios de diagnostico.",
+      "Objeto: Reconstrução da Praça Real e Drenagem Pluvial  na Praça Real localizada na Rua Capitão Modesto Vieira s/nº na área central do município de Morro do Pilar/MG como consta na descrição sumária das metas."
+    ]
+  },
+  "aterros sanitários": {
+    "descricao": "Instalações para disposição controlada de resíduos sólidos.",
+    "exemplos": [
+      "EXECUÇÃO DE OBRAS DE DEPOSIÇÃO FINAL E ADEQUADA DE RESÍDUOS (LIXO) COLETADO APÓS A INUNDAÇÃO."
+    ]
+  },
+  "rede de água potável": {
+    "descricao": "Tubulações e reservatórios para distribuição de água tratada.",
+    "exemplos": [
+      "Construção de sistema de abastecimento de agua em diversas localidade do Município de Palmácia visando o combate a estiagem.",
+      "Construção de rede de abastecimento de água nas linhas rurais de Pinheiro, Cachoeira e Fortaleza de Três Palmeiras/RS",
+      "Interligação de Redes de Abastecimento de Água e Armazenamento no Município de Cerro Branco/RS."
+    ]
+  },
+  "equipamentos urbanos": {
+    "descricao": "Mobiliário urbano e elementos como iluminação e sinalização.",
+    "exemplos": [
+      "descrever o que aconteceu no desastre e os danos causados.",
+      "Observa-se que o pleito trata-se de reparos e intervenções de pequeno porte. Neste sentido, sugere-se que o pleito seja reapresentado na -aba- RESPOSTA, ação Restabelecimento, devendo ser acompanhado de relatório fotográfico da situação que demonstre os danos na estrutura a ser restabelecida,\r\nConforme folha de recomendação realizado plano de trabalho de ações de restabelecimento Protocolo: RES-SC-4215802-20230102-02.",
+      "SOLICITAÇÃO DE VERBAS PARA RECONSTRUÇÃO DE OBRAS AFETADAS PELA TEMPESTADE."
+    ]
+  },
+  "recuperação de praias": {
+    "descricao": "Reposição de sedimentos e reabilitação da orla costeira.",
+    "exemplos": [
+      "Execução de serviço dragagem.",
+      "Entre os dias 25 de outubro à 29 de novembro chegaram ao município de Ilhéus aproximadamente 23 toneladas de óleo (produtos químicos de origem não identificado), que causaram prejuízo aos setores públicos e privados sendo eles o setor hoteleiro, turístico, serviços, ambiental, da administração publica estadual e municipal totalizando uma perda estimada em: R$ 2.217.475,53 (dois milhões,  duzentos e dezessete mil, quatrocentos e setenta e cinco reais e cinquenta e três centavos) sendo este prejuízo intensificado através de laudos de setores responsáveis que indicão a redução do índice de visitas para o setor de turismo, município, a diminuição de consumo e frequência da população em cabanas de praias, a redução do consumo de mariscos em hotéis e restaurantes, os prejuízos aos pescadores e marisqueiros e os prejuízos aos setores públicos (Secretaria de serviços Urbanos, Meios Ambiente, Infraestrutura e demais setores) através da utilização da utilização de recursos humanos, materiais e financeiros."
+    ]
+  },
+  "cais e docas": {
+    "descricao": "Estruturas de atracação e acesso a corpos d'água.",
+    "exemplos": [
+      "Reconstrução do Cais de Novo Santo Antônio, com Muro de Arrimo tipo Gabião, enchimento com Pedra de Mão Tipo Rachão , de Gravidade com Gaiolas de comprimento igual a 2 m , para muros com Altura maior que 6 m e menor ou igual a 10 m .  Volume Total do Muro 1.327,78 m³ ( metros cúbicos) . Reconstrução das Escadarias e Calçada de Passeio com Volume Total de 62 m³ (metros cúbicos)."
+    ]
+  },
+  "reservatórios e cisternas": {
+    "descricao": "Reservatórios e cisternas para armazenamento de água.",
+    "exemplos": [
+      "Recursos necessários para ação de resposta à estiagem, mediante disponibilização de recursos destinados a aquisição de caixas de água a fim de minimizar a sobrecarga do sistema de distribuição e transporte de água no município de Lajeado Grande, afetado por Estiagem COBRADE ¿ 1.4.1.1.0",
+      "A distribuição de água potável para o perímetro urbano é mantido pelo Município. Existe uma Estação de Tratamento de Água - ETA - na área central da cidade, a qual é abastecida por duas fontes superficiais de água. A água bruta captada das fontes superficiais chega até a ETA por gravidade. Quando diminui a vazão por longos períodos sem chuva, o Município precisa complementar a alimentação da ETA com água captada de poços tubulares. Neste período em especial de estiagem, a vazão das fontes superficiais diminui drasticamente e a vazão dos poços tubulares não é suficiente para manter o funcionamento integral da ETA por conta do consumo diário que é de 220 m³/dia. O Município não dispõe de armazenamento de água bruta, a solução para este problema é a construção de um depósito de água, uma cisterna. Com uma cisterna de aproximadamente 2 milhões de litros de água, o Município terá água para pelo menos 9 dias e desta forma haverá um fornecimento contínuo de água para garantir o funcionamento da ETA. É essencial para garantir o funcionamento da ETA e para garantir o abastecimento de água potável para a população, a construção de um reservatório de água bruta. A cisterna será construída na Linha Dal Chiavon, próxima de uma das fontes superficiais de captação de água, sendo que o imóvel onde a fonte superficial se localiza é público."
+    ]
+  },
+  "estações de tratamento de água": {
+    "descricao": "Instalações para tratamento e potabilização de água.",
+    "exemplos": [
+      "Construção ETA - Estação de Tratamento de Água do Município - Reestabelecer abastecimento de água da população."
+    ]
+  },
+  "materiais de construção": {
+    "descricao": "Fornecimento de materiais para reparos e pequenas obras civis.",
+    "exemplos": [
+      "Aquisição de telhas para distribuição as famílias afetadas."
+    ]
+  },
+  "sistema de captação de água": {
+    "descricao": "Instalações de captação de água bruta e adução.",
+    "exemplos": [
+      "Reconstrução do Sistema de Captação de Água Bruta, Localidade Rolador. Execução de cortina de contenção em concreto armado - com canal desarenador; e recuperação de sistema de captação com tubos de ferro fundido e de polietileno."
+    ]
+  },
+  "campo de futebol": {
+    "descricao": "Campo esportivo destinado a jogos e treinos de futebol.",
+    "exemplos": [
+      "RECUPERAÇÃO DO CAMPO DE FUTEBOL MUNICIPAL \"COMANDANTE JOÃO RIBEIRO DE BARROS\""
+    ]
+  },
+  "estações de tratamento de agua": {
+    "descricao": "Instalações para tratamento e potabilização de água.",
+    "exemplos": []
+  },
+  "cemitérios": {
+    "descricao": "Infraestrutura funerária municipal, incluindo sepulturas, capelas, muros e acessos.",
+    "exemplos": [
+      "RECOBSTRUÇÃO DOS DANOS NO CEMITÉRIO MUNICIPAL"
     ]
   }
 }
